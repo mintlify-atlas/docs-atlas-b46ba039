@@ -1,0 +1,378 @@
+---
+title: DownloadManager
+description: Singleton manager for handling music downloads with queue management and progress tracking
+---
+
+The `DownloadManager` is a singleton service that manages music downloads from Deezer. It ensures sequential download processing, tracks download state, and integrates with the local music library and MediaStore.
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/download/DownloadManager.kt:27`
+
+## Features
+
+- **Sequential Processing**: Ensures only one download happens at a time
+- **Queue Management**: Handles up to 20 queued download requests
+- **State Tracking**: Real-time download state via Kotlin Flow
+- **MediaStore Integration**: Automatically scans downloaded files into Android's media library
+- **Playlist Integration**: Can add downloaded tracks directly to playlists
+- **Duplicate Detection**: Skips tracks that are already downloaded
+- **Coroutine Scope**: Uses its own scope so downloads survive navigation
+
+## Initialization
+
+### getInstance()
+
+Get or create the singleton instance.
+
+<ParamField path="context" type="Context" required>
+  Application or activity context (will be converted to applicationContext internally)
+</ParamField>
+
+<ResponseField name="return" type="DownloadManager">
+  The singleton DownloadManager instance
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val downloadManager = DownloadManager.getInstance(context)
+```
+
+## Properties
+
+### downloadState
+
+<ResponseField name="downloadState" type="StateFlow<DownloadState>">
+  Observable state flow of current download status
+</ResponseField>
+
+Subscribe to track download progress:
+
+```kotlin
+val downloadManager = DownloadManager.getInstance(context)
+
+lifecycleScope.launch {
+    downloadManager.downloadState.collect { state ->
+        when (state) {
+            is DownloadState.Idle -> {
+                // No download in progress
+            }
+            is DownloadState.Downloading -> {
+                println("Downloading ${state.type}: ${state.title}")
+                println("Item ID: ${state.itemId}")
+                state.currentTrackId?.let { trackId ->
+                    println("Current track: $trackId")
+                }
+            }
+            is DownloadState.Completed -> {
+                println("Completed: ${state.successCount} succeeded")
+                println("Failed: ${state.failedCount}")
+                println("Skipped: ${state.skippedCount}")
+            }
+            is DownloadState.Error -> {
+                println("Error: ${state.message}")
+            }
+        }
+    }
+}
+```
+
+### downloadRefreshTrigger
+
+<ResponseField name="downloadRefreshTrigger" type="StateFlow<Int>">
+  Counter that increments each time a track is successfully downloaded and confirmed in MediaStore. Use this to trigger UI refreshes.
+</ResponseField>
+
+**Example:**
+
+```kotlin
+lifecycleScope.launch {
+    downloadManager.downloadRefreshTrigger.collect { _ ->
+        // Refresh local music library UI
+        musicRepository.refreshTracks()
+    }
+}
+```
+
+### currentQuality
+
+<ResponseField name="currentQuality" type="DownloadQuality">
+  Dynamic quality setting from user preferences. Reads from SharedPreferences key `audio_quality`.
+</ResponseField>
+
+Possible values: `FLAC`, `MP3_320`, `MP3_128`
+
+### downloadDirectory
+
+<ResponseField name="downloadDirectory" type="String">
+  Base download directory path. Creates the directory if it doesn't exist.
+</ResponseField>
+
+Path is determined by SharedPreferences `download_location`:
+- `"DOWNLOADS"` → `/storage/emulated/0/Download/Deeztracker`
+- `"MUSIC"` (default) → `/storage/emulated/0/Music/Deeztracker`
+
+## Methods
+
+### startTrackDownload()
+
+Queue a single track for download.
+
+<ParamField path="trackId" type="Long" required>
+  Deezer track ID
+</ParamField>
+
+<ParamField path="title" type="String" required>
+  Track title (for display in download state)
+</ParamField>
+
+<ParamField path="targetPlaylistId" type="String?" default="null">
+  Optional playlist ID. If provided, the track will be added to this playlist after download completes.
+</ParamField>
+
+<ResponseField name="return" type="Boolean">
+  `true` if the download request was queued successfully
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val downloadManager = DownloadManager.getInstance(context)
+
+// Simple download
+downloadManager.startTrackDownload(
+    trackId = 3135556L,
+    title = "Get Lucky"
+)
+
+// Download and add to playlist
+downloadManager.startTrackDownload(
+    trackId = 3135556L,
+    title = "Get Lucky",
+    targetPlaylistId = "my-playlist-id"
+)
+```
+
+---
+
+### startAlbumDownload()
+
+Queue an entire album for download.
+
+<ParamField path="albumId" type="Long" required>
+  Deezer album ID
+</ParamField>
+
+<ParamField path="title" type="String" required>
+  Album title (for display in download state)
+</ParamField>
+
+<ResponseField name="return" type="Boolean">
+  `true` if the download request was queued successfully
+</ResponseField>
+
+**Example:**
+
+```kotlin
+downloadManager.startAlbumDownload(
+    albumId = 302127L,
+    title = "Random Access Memories"
+)
+```
+
+<Info>
+The manager will fetch the album's track list from the Deezer API and download each track sequentially. Already-downloaded tracks are automatically skipped.
+</Info>
+
+---
+
+### startPlaylistDownload()
+
+Queue an entire playlist for download.
+
+<ParamField path="playlistId" type="Long" required>
+  Deezer playlist ID
+</ParamField>
+
+<ParamField path="title" type="String" required>
+  Playlist title (for display in download state)
+</ParamField>
+
+<ResponseField name="return" type="Boolean">
+  `true` if the download request was queued successfully
+</ResponseField>
+
+**Example:**
+
+```kotlin
+downloadManager.startPlaylistDownload(
+    playlistId = 1234567890L,
+    title = "Summer Hits 2024"
+)
+```
+
+---
+
+### isDownloading()
+
+Check if a download is currently in progress.
+
+<ResponseField name="return" type="Boolean">
+  `true` if a download is active, `false` otherwise
+</ResponseField>
+
+**Example:**
+
+```kotlin
+if (downloadManager.isDownloading()) {
+    Toast.makeText(context, "Download in progress", Toast.LENGTH_SHORT).show()
+}
+```
+
+---
+
+### resetState()
+
+Reset state to `Idle` if the download queue is empty. Call this after showing a completion notification to the user.
+
+**Example:**
+
+```kotlin
+lifecycleScope.launch {
+    downloadManager.downloadState.collect { state ->
+        if (state is DownloadState.Completed) {
+            // Show notification
+            showNotification(state.title, state.successCount)
+            // Reset state
+            downloadManager.resetState()
+        }
+    }
+}
+```
+
+---
+
+### isTrackDownloaded()
+
+Check if a track is already downloaded in the local library.
+
+<ParamField path="trackTitle" type="String" required>
+  Track title to search for
+</ParamField>
+
+<ParamField path="artistName" type="String" required>
+  Artist name to search for
+</ParamField>
+
+<ResponseField name="return" type="Boolean">
+  `true` if the track is found in local library (using normalized matching)
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val isDownloaded = downloadManager.isTrackDownloaded(
+    trackTitle = "Get Lucky (feat. Pharrell Williams)",
+    artistName = "Daft Punk"
+)
+
+if (isDownloaded) {
+    println("Track already exists locally")
+}
+```
+
+<Info>
+This method uses smart normalization to match tracks:
+- **Title**: Strips `feat.`/`ft.`/`featuring`, removes special characters
+- **Artist**: Allows partial matching to handle multiple artists (e.g., "Artist A" matches "Artist A, Artist B")
+</Info>
+
+## DownloadState
+
+The download state is represented by a sealed class hierarchy:
+
+```kotlin
+sealed class DownloadState {
+    object Idle : DownloadState()
+    
+    data class Downloading(
+        val type: DownloadType,      // TRACK, ALBUM, or PLAYLIST
+        val title: String,            // Title being downloaded
+        val itemId: String,           // Deezer ID
+        val currentTrackId: String? = null  // Current track in batch
+    ) : DownloadState()
+    
+    data class Completed(
+        val type: DownloadType,
+        val title: String,
+        val successCount: Int,
+        val failedCount: Int = 0,
+        val skippedCount: Int = 0    // Already downloaded tracks
+    ) : DownloadState()
+    
+    data class Error(
+        val title: String,
+        val message: String
+    ) : DownloadState()
+}
+
+enum class DownloadType {
+    TRACK,
+    ALBUM,
+    PLAYLIST
+}
+```
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/download/DownloadState.kt:15`
+
+## Download Process Flow
+
+1. **Queue Request**: User calls `startTrackDownload()`, `startAlbumDownload()`, or `startPlaylistDownload()`
+2. **Sequential Processing**: Requests are processed one at a time from the queue (max 20 queued)
+3. **State Updates**: `downloadState` emits `Downloading` state
+4. **Duplicate Check**: For albums/playlists, checks if tracks are already downloaded
+5. **Download**: Calls `RusteerService` to download via Rust FFI
+6. **MediaStore Scan**: Scans file into Android MediaStore
+7. **Playlist Integration**: If `targetPlaylistId` was provided, adds track to playlist
+8. **Refresh Trigger**: Increments `downloadRefreshTrigger` to notify UI
+9. **Completion**: Emits `Completed` or `Error` state
+
+## Integration Example
+
+Complete example integrating DownloadManager in a Compose UI:
+
+```kotlin
+@Composable
+fun DownloadButton(track: Track) {
+    val context = LocalContext.current
+    val downloadManager = remember { DownloadManager.getInstance(context) }
+    val downloadState by downloadManager.downloadState.collectAsState()
+    
+    Button(
+        onClick = {
+            downloadManager.startTrackDownload(
+                trackId = track.id,
+                title = track.title
+            )
+        },
+        enabled = downloadState !is DownloadState.Downloading
+    ) {
+        when (downloadState) {
+            is DownloadState.Downloading -> Text("Downloading...")
+            is DownloadState.Completed -> Text("Download Complete")
+            is DownloadState.Error -> Text("Error")
+            else -> Text("Download")
+        }
+    }
+}
+```
+
+## Thread Safety
+
+<Warning>
+The DownloadManager uses its own coroutine scope (`SupervisorJob + Dispatchers.IO`). All download operations are automatically executed on background threads. Do not call download methods from the main thread without coroutines.
+</Warning>
+
+## See Also
+
+- [RusteerService](/api/rusteer-service) - Low-level Rust download service
+- [PlayerController](/api/player-controller) - Playback control for downloaded tracks

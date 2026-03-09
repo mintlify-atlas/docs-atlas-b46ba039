@@ -1,0 +1,192 @@
+---
+title: "Music Player Components"
+description: "Full-screen music player and mini player UI components"
+---
+
+## Overview
+
+The music player components provide a comprehensive audio playback interface with full-screen and minimized views. These components integrate with the `PlayerController` to manage playback state, track information, and user interactions.
+
+## MusicPlayerScreen
+
+Full-screen music player interface with album artwork, playback controls, lyrics, and track management.
+
+**Location:** `ui/screens/MusicPlayerScreen.kt:59`
+
+### Parameters
+
+<ParamField path="onCollapse" type="() -> Unit" required>
+  Callback invoked when the user collapses the player screen
+</ParamField>
+
+<ParamField path="playerController" type="PlayerController" default="PlayerController.getInstance(LocalContext.current)">
+  Controller instance managing playback state and operations
+</ParamField>
+
+### Features
+
+- **Dual-page interface**: Swipeable horizontal pager with Player and Lyrics pages
+- **Dynamic background**: Blurred album artwork with gradient overlay
+- **Playback controls**: Play/pause, skip, shuffle, and repeat controls
+- **Progress slider**: Seekable progress bar with current/total time display
+- **Playlist management**: Add current track to playlists via menu options
+- **Favorite toggle**: Like/unlike tracks directly from the player
+- **Lyrics view**: Synchronized lyrics display with tap-to-seek functionality
+
+### State Management
+
+The component observes `playerController.playerState` for:
+
+- `currentTrack`: Currently playing track information
+- `isPlaying`: Playback state
+- `currentPosition`: Playback position in milliseconds
+- `duration`: Track duration in milliseconds
+- `isShuffleEnabled`: Shuffle mode state
+- `repeatMode`: Repeat mode (OFF, ALL, ONE)
+- `playingSource`: Source context (e.g., "Local Music", playlist name)
+- `lyrics`: Synchronized lyrics data
+- `currentLyricIndex`: Active lyric line index
+- `isCurrentTrackFavorite`: Favorite status
+
+### Usage Example
+
+```kotlin
+@Composable
+fun MusicPlayerContainer() {
+    var showFullPlayer by remember { mutableStateOf(false) }
+    
+    if (showFullPlayer) {
+        MusicPlayerScreen(
+            onCollapse = { showFullPlayer = false }
+        )
+    }
+}
+```
+
+### Player Page Layout
+
+The primary player page (page 0) includes:
+
+1. **Header**: Collapse button, "Playing from" source label, options menu
+2. **Album art**: 75% width, rounded corners with shadow
+3. **Track info**: Title, artist, favorite button
+4. **Progress bar**: Slider with time labels
+5. **Controls row**: Shuffle, previous, play/pause, next, repeat
+
+### Lyrics Page Layout
+
+The lyrics page (page 1) includes:
+
+- Compact track header with artwork and title
+- `LyricsScreen` component with synchronized lyrics
+- Click-to-seek functionality at specific lyric timestamps
+
+### Menu Options
+
+Accessed via the three-dot menu in the header:
+
+- **Add to Playlist**: Opens `AddToPlaylistBottomSheet` for playlist selection
+
+---
+
+## MiniPlayer
+
+Compact player bar displaying current track with basic playback controls.
+
+**Location:** `ui/screens/MiniPlayer.kt:37`
+
+### Parameters
+
+<ParamField path="onClick" type="() -> Unit" required>
+  Callback invoked when the mini player is tapped (typically expands to full player)
+</ParamField>
+
+<ParamField path="playerController" type="PlayerController" default="PlayerController.getInstance(LocalContext.current)">
+  Controller instance managing playback state and operations
+</ParamField>
+
+### Features
+
+- **Auto-hide**: Only displays when a track is currently loaded
+- **Compact design**: 64dp height with rounded corners
+- **Progress indicator**: 2dp progress bar at bottom edge
+- **Quick controls**: Play/pause and skip next buttons
+- **Glassy appearance**: Semi-transparent background with 90% opacity
+
+### Layout Structure
+
+From left to right:
+
+1. **Album artwork**: 48x48dp with 8dp rounded corners
+2. **Track info**: Title (bold, 14sp) and artist (12sp, gray)
+3. **Play/pause button**: Icon toggles based on playback state
+4. **Skip next button**: Advances to next track
+
+### Progress Bar
+
+A thin progress indicator spans the full width at the bottom:
+
+- Height: 2dp
+- Background: White at 10% opacity
+- Active color: Primary theme color
+- Width: Calculated as `currentPosition / duration`
+
+### Usage Example
+
+```kotlin
+@Composable
+fun MainScreen() {
+    var showFullPlayer by remember { mutableStateOf(false) }
+    
+    Scaffold(
+        bottomBar = {
+            Column {
+                MiniPlayer(
+                    onClick = { showFullPlayer = true }
+                )
+                NavigationBar { /* ... */ }
+            }
+        }
+    ) { /* content */ }
+}
+```
+
+### Styling
+
+- **Container**: `Color(0xFF1E1E1E).copy(alpha = 0.90f)`
+- **Corner radius**: 12dp
+- **Padding**: 8dp horizontal, 4dp vertical outer padding
+- **Clickable**: Entire container expands player on tap
+
+---
+
+## PlayerController Integration
+
+Both components rely on `PlayerController` singleton for state and operations:
+
+### Core Operations
+
+```kotlin
+playerController.togglePlayPause()    // Play/pause current track
+playerController.next()                // Skip to next track
+playerController.previous()            // Skip to previous track
+playerController.seekTo(position)      // Seek to position (ms)
+playerController.setShuffle(enabled)   // Toggle shuffle mode
+playerController.toggleRepeatMode()    // Cycle repeat modes
+playerController.toggleFavorite()      // Like/unlike current track
+```
+
+### State Collection
+
+```kotlin
+val playerState by playerController.playerState.collectAsState()
+val track = playerState.currentTrack
+val isPlaying = playerState.isPlaying
+```
+
+---
+
+## Related Components
+
+- [Track List](/api/components/track-list) - Track list item rendering
+- [Dialogs](/api/components/dialogs) - Playlist and track management dialogs

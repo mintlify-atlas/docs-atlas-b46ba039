@@ -1,0 +1,140 @@
+---
+title: 'Album'
+description: 'Album data model representing a music album in Deeztracker Mobile'
+---
+
+## Overview
+
+The `Album` data class represents a music album in Deeztracker Mobile. It contains metadata about an album including its title, artist, cover art, and a collection of tracks.
+
+## Album Model
+
+Defined in `app/src/main/java/com/crowstar/deeztrackermobile/data/model/Album.kt`
+
+### Properties
+
+<ResponseField name="id" type="String" required>
+  Unique identifier for the album
+</ResponseField>
+
+<ResponseField name="title" type="String" required>
+  Title of the album
+</ResponseField>
+
+<ResponseField name="artist" type="String" required>
+  Artist name for the album
+</ResponseField>
+
+<ResponseField name="coverUrl" type="String?">
+  Optional URL to the album's cover art image. Can be null if no cover is available.
+</ResponseField>
+
+<ResponseField name="tracks" type="List<Track>" default="emptyList()">
+  List of tracks contained in the album. Defaults to an empty list if no tracks are provided.
+</ResponseField>
+
+## Relationship to Tracks
+
+The `Album` model has a one-to-many relationship with `Track` objects. Each album can contain multiple tracks through the `tracks` property, which is a `List<Track>`.
+
+```kotlin
+val album = Album(
+    id = "album123",
+    title = "A Night at the Opera",
+    artist = "Queen",
+    coverUrl = "https://example.com/covers/album123.jpg",
+    tracks = listOf(
+        Track(
+            id = "track1",
+            title = "Bohemian Rhapsody",
+            artist = "Queen",
+            album = "A Night at the Opera",
+            duration = 354000L,
+            coverUrl = "https://example.com/covers/album123.jpg",
+            streamUrl = "https://example.com/stream/track1"
+        ),
+        // More tracks...
+    )
+)
+```
+
+## Example Usage
+
+### Creating an Album without Tracks
+
+```kotlin
+val album = Album(
+    id = "album456",
+    title = "The Dark Side of the Moon",
+    artist = "Pink Floyd",
+    coverUrl = "https://example.com/covers/album456.jpg"
+)
+// tracks defaults to emptyList()
+```
+
+### Creating an Album with Tracks
+
+```kotlin
+val tracksInAlbum = listOf(
+    Track(
+        id = "t1",
+        title = "Speak to Me",
+        artist = "Pink Floyd",
+        album = "The Dark Side of the Moon",
+        duration = 90000L,
+        coverUrl = "https://example.com/covers/album456.jpg",
+        streamUrl = "https://example.com/stream/t1"
+    ),
+    Track(
+        id = "t2",
+        title = "Breathe",
+        artist = "Pink Floyd",
+        album = "The Dark Side of the Moon",
+        duration = 163000L,
+        coverUrl = "https://example.com/covers/album456.jpg",
+        streamUrl = "https://example.com/stream/t2"
+    )
+)
+
+val album = Album(
+    id = "album456",
+    title = "The Dark Side of the Moon",
+    artist = "Pink Floyd",
+    coverUrl = "https://example.com/covers/album456.jpg",
+    tracks = tracksInAlbum
+)
+```
+
+### Accessing Album Tracks
+
+```kotlin
+// Get all tracks from an album
+val allTracks = album.tracks
+
+// Get track count
+val trackCount = album.tracks.size
+
+// Iterate through tracks
+album.tracks.forEach { track ->
+    println("${track.title} - ${track.duration}ms")
+}
+```
+
+## Source Code
+
+```kotlin
+package com.crowstar.deeztrackermobile.data.model
+
+data class Album(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val coverUrl: String?,
+    val tracks: List<Track> = emptyList()
+)
+```
+
+## Related Models
+
+- [Track](/api/models/track) - Track model contained within albums
+- [Playlist](/api/models/playlist) - Playlist models that can contain tracks from multiple albums

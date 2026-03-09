@@ -1,0 +1,479 @@
+---
+title: Building from Source
+description: Complete guide to building Deeztracker Mobile from source code
+---
+
+## Prerequisites
+
+Before building Deeztracker Mobile, ensure you have the following installed:
+
+### Required Software
+
+<AccordionGroup>
+  <Accordion title="Android Studio" icon="android">
+    - **Version**: Android Studio Hedgehog (2023.1.1) or later
+    - **Download**: [developer.android.com/studio](https://developer.android.com/studio)
+    - Includes Android SDK, Build Tools, and emulator support
+  </Accordion>
+
+  <Accordion title="Java Development Kit (JDK)" icon="java">
+    - **Version**: JDK 8 or later (JDK 11 recommended)
+    - **Required for**: Gradle builds and Android compilation
+    - Java 8 compatibility is enforced via `JavaVersion.VERSION_1_8` in build config
+  </Accordion>
+
+  <Accordion title="Rust Toolchain" icon="rust">
+    - **Required for**: Building the `rusteer` native library
+    - **Installation**: Install via [rustup.rs](https://rustup.rs/)
+    - **Target**: Android NDK targets (aarch64, armv7, x86_64, i686)
+    
+    ```bash
+    # Install Rust
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    
+    # Add Android targets
+    rustup target add aarch64-linux-android
+    rustup target add armv7-linux-androideabi
+    rustup target add x86_64-linux-android
+    rustup target add i686-linux-android
+    ```
+  </Accordion>
+
+  <Accordion title="Android NDK" icon="toolbox">
+    - **Version**: NDK r25c or later
+    - **Required for**: Compiling Rust code to native Android libraries
+    - **Installation**: Via Android Studio SDK Manager
+  </Accordion>
+</AccordionGroup>
+
+### SDK Configuration
+
+The project requires:
+- **Compile SDK**: API 34 (Android 14)
+- **Min SDK**: API 24 (Android 7.0)
+- **Target SDK**: API 34
+
+These are defined in `app/build.gradle.kts:10-16`:
+
+```kotlin
+android {
+    namespace = "com.crowstar.deeztrackermobile"
+    compileSdk = 34
+    
+    defaultConfig {
+        applicationId = "com.crowstar.deeztrackermobile"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 5
+        versionName = "1.1.1"
+    }
+}
+```
+
+---
+
+## Cloning the Repository
+
+<Steps>
+  <Step title="Clone with Git">
+    ```bash
+    git clone https://github.com/xScherpschutter/deeztracker-mobile.git
+    cd deeztracker-mobile
+    ```
+  </Step>
+
+  <Step title="Verify project structure">
+    ```bash
+    ls -la
+    # Expected output:
+    # app/          - Android application module
+    # rusteer/      - Rust library for Deezer integration
+    # gradle/       - Gradle wrapper files
+    # build.gradle.kts
+    # settings.gradle.kts
+    ```
+  </Step>
+
+  <Step title="Sync project with Gradle">
+    Open the project in Android Studio and let it sync dependencies automatically, or run:
+    
+    ```bash
+    ./gradlew build --dry-run
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Build Commands
+
+### Debug Build
+
+Build a debug APK for testing and development:
+
+<CodeGroup>
+```bash Gradle Wrapper (Recommended)
+./gradlew assembleDebug
+```
+
+```bash Windows
+gradlew.bat assembleDebug
+```
+
+```bash With Clean
+./gradlew clean assembleDebug
+```
+</CodeGroup>
+
+**Output location**: `app/build/outputs/apk/debug/Deeztracker-1.1.1.apk`
+
+<Note>
+Debug builds include debugging symbols and are not optimized. APK size will be larger than release builds.
+</Note>
+
+### Release Build
+
+Build an optimized release APK:
+
+<CodeGroup>
+```bash Basic Release
+./gradlew assembleRelease
+```
+
+```bash Clean + Release
+./gradlew clean assembleRelease
+```
+
+```bash Bundle for Play Store
+./gradlew bundleRelease
+```
+</CodeGroup>
+
+**Output location**: `app/build/outputs/apk/release/Deeztracker-1.1.1.apk`
+
+<Warning>
+Release builds require signing configuration. See [Signing Configuration](#signing-configuration) below.
+</Warning>
+
+---
+
+## Running on Device/Emulator
+
+### Install Debug Build
+
+<CodeGroup>
+```bash Install Debug
+./gradlew installDebug
+```
+
+```bash Build + Install + Run
+./gradlew installDebug
+adb shell am start -n com.crowstar.deeztrackermobile/.MainActivity
+```
+
+```bash Install on Specific Device
+adb -s <device-id> install app/build/outputs/apk/debug/Deeztracker-1.1.1.apk
+```
+</CodeGroup>
+
+### Install Release Build
+
+```bash
+./gradlew installRelease
+```
+
+### Run from Android Studio
+
+1. Open the project in Android Studio
+2. Select a device/emulator from the device dropdown
+3. Click **Run** (▶️) or press `Shift + F10`
+4. The app will build, install, and launch automatically
+
+---
+
+## Signing Configuration
+
+### Development Signing
+
+Debug builds are automatically signed with the debug keystore located at:
+- **Linux/Mac**: `~/.android/debug.keystore`
+- **Windows**: `C:\Users\<username>\.android\debug.keystore`
+
+### Release Signing
+
+Release builds require a custom keystore. The project is configured to use `deeztracker.jks` in the root directory.
+
+<Steps>
+  <Step title="Create a keystore">
+    ```bash
+    keytool -genkey -v -keystore deeztracker.jks \
+      -keyalg RSA -keysize 2048 -validity 10000 \
+      -alias deeztracker
+    ```
+    
+    Follow the prompts to set passwords and certificate details.
+  </Step>
+
+  <Step title="Create keystore.properties">
+    Create a file named `keystore.properties` in the project root:
+    
+    ```properties keystore.properties
+    storePassword=your_store_password
+    keyPassword=your_key_password
+    keyAlias=deeztracker
+    storeFile=../deeztracker.jks
+    ```
+    
+    <Warning>
+    **Never commit `keystore.properties` or `deeztracker.jks` to version control!** 
+    
+    These files are already listed in `.gitignore`.
+    </Warning>
+  </Step>
+
+  <Step title="Build signed release">
+    ```bash
+    ./gradlew assembleRelease
+    ```
+    
+    The signing configuration is automatically loaded from `app/build.gradle.kts:26-39`:
+    
+    ```kotlin
+    signingConfigs {
+        create("release") {
+            val keystorePropertiesFile = rootProject.file("keystore.properties")
+            val keystoreProperties = Properties()
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+            }
+            
+            storeFile = file("../deeztracker.jks")
+            storePassword = keystoreProperties["storePassword"] as String? 
+                ?: System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = keystoreProperties["keyAlias"] as String? 
+                ?: System.getenv("KEY_ALIAS")
+            keyPassword = keystoreProperties["keyPassword"] as String? 
+                ?: System.getenv("KEY_PASSWORD")
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+### CI/CD Signing
+
+For automated builds (GitHub Actions, etc.), use environment variables instead of `keystore.properties`:
+
+```bash
+export KEYSTORE_PASSWORD="your_password"
+export KEY_ALIAS="deeztracker"
+export KEY_PASSWORD="your_key_password"
+./gradlew assembleRelease
+```
+
+---
+
+## Build Configuration
+
+### ProGuard/R8
+
+The project uses R8 for code shrinking and obfuscation in release builds:
+
+```kotlin app/build.gradle.kts:41-46
+buildTypes {
+    release {
+        isMinifyEnabled = false  // Currently disabled
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"), 
+            "proguard-rules.pro"
+        )
+        signingConfig = signingConfigs.getByName("release")
+    }
+}
+```
+
+<Note>
+ProGuard is currently **disabled** (`isMinifyEnabled = false`). To enable code shrinking, set this to `true` and configure `proguard-rules.pro` as needed.
+</Note>
+
+### Core Library Desugaring
+
+The project uses desugaring to support Java 8+ APIs on older Android versions:
+
+```kotlin app/build.gradle.kts:48-52
+compileOptions {
+    isCoreLibraryDesugaringEnabled = true
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+}
+```
+
+This enables modern APIs like `java.time` on API 24+.
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Build fails with 'SDK not found'" icon="triangle-exclamation">
+    **Solution**: Set `ANDROID_HOME` environment variable:
+    
+    ```bash
+    # Linux/Mac
+    export ANDROID_HOME=$HOME/Android/Sdk
+    export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
+    
+    # Windows
+    set ANDROID_HOME=C:\Users\<username>\AppData\Local\Android\Sdk
+    ```
+    
+    Add this to your `.bashrc`, `.zshrc`, or system environment variables.
+  </Accordion>
+
+  <Accordion title="Rust library build fails" icon="rust">
+    **Possible causes**:
+    
+    1. **Missing Rust toolchain**: Install via `rustup.rs`
+    2. **Missing Android targets**: Run:
+       ```bash
+       rustup target add aarch64-linux-android armv7-linux-androideabi
+       ```
+    3. **NDK not configured**: Set `ANDROID_NDK_HOME`:
+       ```bash
+       export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/<version>
+       ```
+    
+    The `rusteer` library uses **UniFFI** to generate Kotlin bindings from Rust code (`rusteer/src/bindings.rs`).
+  </Accordion>
+
+  <Accordion title="Signing fails: keystore not found" icon="key">
+    **Error**: `Keystore file '.../deeztracker.jks' not found for signing config 'release'`
+    
+    **Solutions**:
+    
+    1. Create `keystore.properties` with correct paths (see [Signing Configuration](#signing-configuration))
+    2. For CI/CD, use environment variables instead
+    3. For debug builds, use `./gradlew assembleDebug` (doesn't require custom keystore)
+  </Accordion>
+
+  <Accordion title="Out of memory during build" icon="memory">
+    **Solution**: Increase Gradle heap size in `gradle.properties`:
+    
+    ```properties gradle.properties
+    org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m
+    ```
+    
+    Or pass it via command line:
+    
+    ```bash
+    ./gradlew assembleRelease -Dorg.gradle.jvmargs=-Xmx4096m
+    ```
+  </Accordion>
+
+  <Accordion title="Duplicate class errors" icon="copy">
+    **Error**: `Duplicate class ... found in modules ...`
+    
+    **Solution**: Clean build cache and rebuild:
+    
+    ```bash
+    ./gradlew clean
+    rm -rf .gradle build app/build
+    ./gradlew assembleDebug
+    ```
+  </Accordion>
+
+  <Accordion title="App crashes on launch (debug mode)" icon="bug">
+    **Check logs** using Logcat:
+    
+    ```bash
+    adb logcat | grep -i deeztracker
+    ```
+    
+    Common issues:
+    - Missing native libraries (rusteer .so files)
+    - Permissions not granted (storage access)
+    - Missing Deezer ARL token
+  </Accordion>
+</AccordionGroup>
+
+### Gradle Daemon Issues
+
+If builds hang or behave unexpectedly:
+
+```bash
+# Stop Gradle daemon
+./gradlew --stop
+
+# Clean and rebuild
+./gradlew clean assembleDebug
+```
+
+### Cache Corruption
+
+```bash
+# Clear all caches
+rm -rf ~/.gradle/caches/
+rm -rf .gradle/
+rm -rf app/build/
+
+# Invalidate IDE caches (Android Studio)
+# File → Invalidate Caches → Invalidate and Restart
+```
+
+---
+
+## Gradle Tasks Reference
+
+### Build Tasks
+
+| Task | Description |
+|------|-------------|
+| `./gradlew assembleDebug` | Build debug APK |
+| `./gradlew assembleRelease` | Build release APK (requires signing) |
+| `./gradlew bundleRelease` | Build Android App Bundle (.aab) |
+| `./gradlew clean` | Delete all build outputs |
+
+### Installation Tasks
+
+| Task | Description |
+|------|-------------|
+| `./gradlew installDebug` | Install debug APK to connected device |
+| `./gradlew installRelease` | Install release APK to connected device |
+| `./gradlew uninstallAll` | Uninstall app from all connected devices |
+
+### Testing Tasks
+
+| Task | Description |
+|------|-------------|
+| `./gradlew test` | Run unit tests |
+| `./gradlew connectedAndroidTest` | Run instrumented tests on device |
+| `./gradlew lint` | Run Android Lint checks |
+
+### Utility Tasks
+
+| Task | Description |
+|------|-------------|
+| `./gradlew dependencies` | Show dependency tree |
+| `./gradlew tasks` | List all available tasks |
+| `./gradlew --status` | Show Gradle daemon status |
+| `./gradlew --stop` | Stop Gradle daemon |
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/development/architecture">
+    Understand the MVVM architecture and Rust FFI integration
+  </Card>
+  
+  <Card title="Project Structure" icon="folder-tree" href="/development/project-structure">
+    Explore the codebase organization and key files
+  </Card>
+</CardGroup>

@@ -1,0 +1,359 @@
+---
+title: "Track List Components"
+description: "Track list item rendering with context menus and interactive elements"
+---
+
+## Overview
+
+Track list components render audio tracks in various contexts including local music libraries, albums, playlists, and search results. Each component includes artwork, metadata, and contextual actions.
+
+## LocalTracksList
+
+Scrollable list of local music tracks with alphabetical fast scrolling.
+
+**Location:** `ui/screens/LocalMusicScreen.kt:479`
+
+### Parameters
+
+<ParamField path="tracks" type="List<LocalTrack>" required>
+  List of local tracks to display
+</ParamField>
+
+<ParamField path="state" type="LazyListState" default="rememberLazyListState()">
+  Scroll state for the lazy list (supports state restoration)
+</ParamField>
+
+<ParamField path="onTrackClick" type="(LocalTrack, List<LocalTrack>) -> Unit" required>
+  Callback when track is clicked. Receives the track and full track list for queue context.
+</ParamField>
+
+<ParamField path="onShare" type="(LocalTrack) -> Unit" required>
+  Callback to share a track file
+</ParamField>
+
+<ParamField path="onDelete" type="(LocalTrack) -> Unit" required>
+  Callback to delete a track from device
+</ParamField>
+
+<ParamField path="onEdit" type="(LocalTrack) -> Unit" required>
+  Callback to edit track metadata
+</ParamField>
+
+<ParamField path="onAddToPlaylist" type="(LocalTrack) -> Unit" required>
+  Callback to add track to a playlist
+</ParamField>
+
+<ParamField path="totalStorage" type="Long" required>
+  Total device storage in bytes for progress calculation
+</ParamField>
+
+<ParamField path="contentPadding" type="Dp" default="0.dp">
+  Bottom padding for dynamic navigation bar spacing
+</ParamField>
+
+### Features
+
+- **Statistics bar**: Shows track count, storage usage bar, and total size in GB
+- **Alphabetical indexing**: Fast scroll bar with A-Z letters for quick navigation
+- **Auto-sync scrolling**: Current letter indicator updates based on scroll position
+- **Format badges**: Visual indicators for FLAC, WAV, MP3, AAC formats
+- **File size display**: Compact size display per track
+- **Context menu**: Share, add to playlist, details, edit, delete options
+
+### Usage Example
+
+```kotlin
+@Composable
+fun LocalMusicTab() {
+    val tracks by viewModel.tracks.collectAsState()
+    val totalStorage by viewModel.totalStorage.collectAsState()
+    
+    LocalTracksList(
+        tracks = tracks,
+        onTrackClick = { track, list -> 
+            playerController.playTrack(track, list)
+        },
+        onShare = { track -> shareTrack(track) },
+        onDelete = { track -> viewModel.deleteTrack(track) },
+        onEdit = { track -> showEditDialog(track) },
+        onAddToPlaylist = { track -> showPlaylistPicker(track) },
+        totalStorage = totalStorage,
+        contentPadding = 80.dp
+    )
+}
+```
+
+---
+
+## LocalTrackItem
+
+Individual track list item with album art, metadata, format badge, and context menu.
+
+**Location:** `ui/screens/LocalMusicScreen.kt:737`
+
+### Parameters
+
+<ParamField path="track" type="LocalTrack" required>
+  Track data to display
+</ParamField>
+
+<ParamField path="onShare" type="() -> Unit" required>
+  Callback to share the track
+</ParamField>
+
+<ParamField path="onDelete" type="() -> Unit" required>
+  Callback to delete the track
+</ParamField>
+
+<ParamField path="onEdit" type="() -> Unit" required>
+  Callback to edit track metadata
+</ParamField>
+
+<ParamField path="onAddToPlaylist" type="(() -> Unit)?" default="null">
+  Optional callback to add track to playlist
+</ParamField>
+
+<ParamField path="onClick" type="() -> Unit" required>
+  Callback when track row is clicked
+</ParamField>
+
+<ParamField path="deleteLabel" type="String" default="stringResource(R.string.action_delete)">
+  Custom label for delete menu item
+</ParamField>
+
+### Layout Structure
+
+1. **Album artwork**: 48x48dp rounded square
+2. **Track title**: Bold, 16sp, marquee scrolling for overflow
+3. **Artist name**: 12sp, gray color
+4. **Format badge**: FLAC (blue), WAV (amber), MP3/AAC (gray)
+5. **File size**: Compact format (e.g., "3.2MB")
+6. **Menu button**: Three-dot icon for context actions
+
+### Context Menu Actions
+
+- **Share**: Opens system share sheet for the audio file
+- **Add to Playlist**: Shows playlist picker (if callback provided)
+- **Details**: Opens `TrackDetailsDialog` with file information
+- **Edit**: Opens `EditTrackDialog` for metadata editing
+- **Delete**: Deletes the track from device (red text)
+
+### Format Badges
+
+Visual indicators based on MIME type:
+
+| Format | Color | Background |
+|--------|-------|------------|
+| FLAC | Blue (`#00A2E8`) | Blue at 20% opacity |
+| WAV | Amber (`#FFC107`) | Amber at 20% opacity |
+| MP3 | Gray | Surface dark |
+| AAC | Gray | Surface dark |
+
+---
+
+## AlbumGridItem
+
+Grid item for displaying album with artwork and metadata.
+
+**Location:** `ui/screens/LocalMusicScreen.kt:634`
+
+### Parameters
+
+<ParamField path="album" type="LocalAlbum" required>
+  Album data to display
+</ParamField>
+
+<ParamField path="onClick" type="() -> Unit" required>
+  Callback when album is clicked
+</ParamField>
+
+### Layout
+
+- **Artwork**: Square aspect ratio (1:1) with 8dp rounded corners
+- **Title**: 14sp, medium weight, marquee scrolling
+- **Artist**: 12sp, gray color, marquee scrolling
+- **Alignment**: Center-aligned in column
+
+### Usage Example
+
+```kotlin
+LazyVerticalGrid(columns = GridCells.Fixed(2)) {
+    items(albums) { album ->
+        AlbumGridItem(
+            album = album,
+            onClick = { navigateToAlbum(album.id) }
+        )
+    }
+}
+```
+
+---
+
+## ArtistGridItem
+
+Grid item for displaying artist with circular avatar and track count.
+
+**Location:** `ui/screens/LocalMusicScreen.kt:694`
+
+### Parameters
+
+<ParamField path="artist" type="LocalArtist" required>
+  Artist data to display
+</ParamField>
+
+<ParamField path="onClick" type="() -> Unit" required>
+  Callback when artist is clicked
+</ParamField>
+
+### Layout
+
+- **Avatar**: 96dp circular shape with person icon placeholder
+- **Name**: 14sp, medium weight, marquee scrolling
+- **Track count**: "X songs" in gray, 12sp
+- **Alignment**: Center-aligned in column
+
+### Usage Example
+
+```kotlin
+LazyVerticalGrid(columns = GridCells.Fixed(3)) {
+    items(artists) { artist ->
+        ArtistGridItem(
+            artist = artist,
+            onClick = { navigateToArtist(artist.name) }
+        )
+    }
+}
+```
+
+---
+
+## TrackListItem (Deezer)
+
+Track list item for online Deezer tracks with download functionality.
+
+**Location:** `ui/screens/AlbumScreen.kt:279`
+
+### Parameters
+
+<ParamField path="track" type="Track" required>
+  Deezer track data to display
+</ParamField>
+
+<ParamField path="index" type="Int" required>
+  Track number in the list
+</ParamField>
+
+<ParamField path="isDownloaded" type="Boolean" required>
+  Whether track is already downloaded
+</ParamField>
+
+<ParamField path="isDownloading" type="Boolean" required>
+  Whether track is currently downloading
+</ParamField>
+
+<ParamField path="onDownloadClick" type="() -> Unit" required>
+  Callback to initiate download
+</ParamField>
+
+### Layout Structure
+
+1. **Track number**: Left-aligned, 32dp width
+2. **Track title**: Bold, 14sp, white
+3. **Artist name**: 12sp, gray (hidden if same as album)
+4. **Duration**: Formatted time (mm:ss)
+5. **Preview button**: 30-second preview playback
+6. **Download button**: States: download icon, progress spinner, or checkmark
+
+### Download States
+
+| State | Icon | Color | Enabled |
+|-------|------|-------|----------|
+| Not downloaded | Download icon | Primary | Yes |
+| Downloading | Circular progress | Primary | No |
+| Downloaded | Checkmark | Green | No |
+
+### Usage Example
+
+```kotlin
+items(tracks.size) { index ->
+    val track = tracks[index]
+    var isDownloaded by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(track.id) {
+        isDownloaded = downloadManager.isTrackDownloaded(
+            track.title,
+            track.artist?.name ?: ""
+        )
+    }
+    
+    TrackListItem(
+        track = track,
+        index = index + 1,
+        isDownloaded = isDownloaded,
+        isDownloading = downloadState.currentTrackId == track.id.toString(),
+        onDownloadClick = { downloadManager.startTrackDownload(track.id) }
+    )
+}
+```
+
+---
+
+## PlaylistTrackItem
+
+Track item variant for playlist screens (similar to `TrackListItem` but with album art).
+
+**Location:** `ui/screens/PlaylistScreen.kt:285`
+
+### Key Differences from TrackListItem
+
+- Shows album artwork (48x48dp) instead of track number
+- Includes artist name even if it matches album
+- Used in playlist detail views
+
+### Parameters
+
+Identical to `TrackListItem`, except:
+
+- No `index` parameter
+- Album artwork displayed from `track.album?.coverSmall`
+
+---
+
+## FormatBadge
+
+Compact format indicator for audio file types.
+
+**Location:** `ui/screens/LocalMusicScreen.kt:880`
+
+### Parameter
+
+<ParamField path="mimeType" type="String" required>
+  MIME type of the audio file (e.g., "audio/flac", "audio/mpeg")
+</ParamField>
+
+### Format Detection
+
+```kotlin
+val (text, color) = when {
+    mimeType.contains("flac") -> "FLAC" to Color(0xFF00A2E8)
+    mimeType.contains("wav") -> "WAV" to Color(0xFFFFC107)
+    mimeType.contains("mpeg") || mimeType.contains("mp3") -> "MP3" to TextGray
+    mimeType.contains("mp4") || mimeType.contains("aac") -> "AAC" to TextGray
+    else -> "AUDIO" to TextGray
+}
+```
+
+### Styling
+
+- **Padding**: 4dp horizontal, 2dp vertical
+- **Font**: 10sp, bold
+- **Corner radius**: 4dp
+- **High-quality formats** (FLAC, WAV): Colored background and text
+- **Standard formats** (MP3, AAC): Gray text on dark background
+
+---
+
+## Related Components
+
+- [Music Player](/api/components/music-player) - Full-screen and mini player
+- [Dialogs](/api/components/dialogs) - Track details and editing dialogs

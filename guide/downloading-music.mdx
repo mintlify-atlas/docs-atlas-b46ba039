@@ -1,0 +1,339 @@
+---
+title: Downloading Music
+description: Learn how to search for and download tracks, albums, and playlists from Deezer
+---
+
+## Overview
+
+Deeztracker Mobile allows you to download music from Deezer's catalog to your Android device for offline playback. Downloads are managed through a queue system that processes requests sequentially.
+
+## Searching for Content
+
+The Search screen is your starting point for finding music to download.
+
+<Steps>
+  <Step title="Navigate to Search">
+    Tap the **Search** icon in the bottom navigation bar to open the search screen.
+  </Step>
+
+  <Step title="Enter Search Query">
+    - Tap the search field at the top
+    - Type your search query (artist name, song title, album, or playlist)
+    - Press the search button or Enter key
+  </Step>
+
+  <Step title="Browse Results by Category">
+    Use the category tabs to filter results:
+    - **Tracks**: Individual songs
+    - **Artists**: Artist profiles
+    - **Albums**: Full albums
+    - **Playlists**: Curated playlists
+  </Step>
+</Steps>
+
+<Info>
+Search results automatically load more content as you scroll down (infinite scroll). You can preview tracks before downloading by tapping the play button.
+</Info>
+
+## Selecting Quality Settings
+
+Before downloading, configure your preferred audio quality:
+
+1. Go to **Settings** → **Audio Quality**
+2. Choose from available options:
+   - **FLAC**: Lossless quality (Premium only)
+   - **MP3_320**: 320 kbps MP3 (Premium only)
+   - **MP3_128**: 128 kbps MP3 (Free & Premium)
+
+<Warning>
+FLAC and 320kbps downloads require a Deezer Premium account. If you select a quality higher than your account supports, downloads will fail. See [Authentication](/guide/authentication#premium-vs-free-accounts) for details.
+</Warning>
+
+The app reads your quality preference from SharedPreferences:
+
+```kotlin DownloadManager.kt:78-87
+val currentQuality: DownloadQuality
+    get() {
+        val saved = prefs.getString("audio_quality", "MP3_128")
+        return when (saved) {
+            "MP3_320" -> DownloadQuality.MP3_320
+            "FLAC" -> DownloadQuality.FLAC
+            else -> DownloadQuality.MP3_128
+        }
+    }
+```
+
+## Downloading Tracks
+
+To download individual tracks from search results:
+
+<Steps>
+  <Step title="Find Your Track">
+    Search for the track and locate it in the **Tracks** tab.
+  </Step>
+
+  <Step title="Tap Download Button">
+    Tap the **download icon** (↓) on the right side of the track item.
+  </Step>
+
+  <Step title="Monitor Progress">
+    - The download button changes to a loading spinner
+    - Once complete, it shows a checkmark (✓)
+    - You'll see a notification showing the download result
+  </Step>
+</Steps>
+
+```kotlin SearchScreen.kt:446-454
+TrackItem(
+    track = track,
+    isDownloaded = isDownloaded,
+    isDownloading = isDownloading && 
+        (downloadState as? DownloadState.Downloading)?.itemId == track.id.toString(),
+    onDownloadClick = {
+        downloadManager.startTrackDownload(track.id, track.title)
+    }
+)
+```
+
+## Downloading Albums
+
+To download entire albums:
+
+<Steps>
+  <Step title="Open Album Details">
+    - Search for the album or artist
+    - Tap on an album from search results
+    - The album detail screen opens showing all tracks
+  </Step>
+
+  <Step title="Download Entire Album">
+    Tap the **"Download Album"** button at the top of the track list.
+  </Step>
+
+  <Step title="Track Download Progress">
+    - The app downloads tracks sequentially
+    - Already downloaded tracks are automatically skipped
+    - Progress is shown in the button and individual track items
+    - A notification appears when complete with success/skip/failure counts
+  </Step>
+</Steps>
+
+<Info>
+**Smart Skip**: The app checks if tracks are already downloaded before starting. This prevents duplicates and saves bandwidth.
+</Info>
+
+```kotlin AlbumScreen.kt:153-158
+Button(
+    onClick = {
+        album?.let { albumData ->
+            downloadManager.startAlbumDownload(albumData.id, albumData.title)
+        }
+    },
+```
+
+## Downloading Playlists
+
+Playlist downloads work similarly to albums:
+
+<Steps>
+  <Step title="Find a Playlist">
+    Search for playlists using keywords or browse from artist pages.
+  </Step>
+
+  <Step title="Open Playlist Details">
+    Tap on a playlist to view all its tracks.
+  </Step>
+
+  <Step title="Download Playlist">
+    Tap the **"Download Playlist"** button to download all tracks in the playlist.
+  </Step>
+</Steps>
+
+## Monitoring Download Progress
+
+Deeztracker Mobile provides real-time feedback on downloads:
+
+### Visual Indicators
+
+- **Download Button States**:
+  - Normal: Download icon (↓) in primary color
+  - Downloading: Circular progress spinner
+  - Complete: Green checkmark (✓)
+
+- **Notifications**: After completion, you'll see:
+  - Success count: Number of tracks downloaded
+  - Skipped count: Tracks already on device
+  - Failed count: Tracks that couldn't be downloaded
+
+### Download Queue System
+
+Downloads are processed sequentially through a queue:
+
+```kotlin DownloadManager.kt:58-76
+// Queue for sequential processing (limited to 20 items to prevent saturation)
+private val downloadChannel = kotlinx.coroutines.channels.Channel<DownloadRequest>(20)
+
+private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
+val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
+
+init {
+    // Start processing the queue
+    managerScope.launch {
+        for (request in downloadChannel) {
+            processRequest(request)
+        }
+    }
+}
+```
+
+<Note>
+The queue can hold up to 20 download requests. Downloads survive screen navigation and continue in the background.
+</Note>
+
+## Managing Storage and File Locations
+
+### Download Location
+
+By default, music is saved to your device's Music folder:
+
+- **Default**: `/storage/emulated/0/Music/Deeztracker/`
+- **Alternative**: `/storage/emulated/0/Download/Deeztracker/`
+
+You can change the download location in [Settings](/guide/settings):
+
+1. Go to **Settings** → **Storage**
+2. Select **"Download Location"**
+3. Choose between:
+   - **Music folder** (default)
+   - **Downloads folder**
+
+```kotlin DownloadManager.kt:93-107
+val downloadDirectory: String
+    get() {
+        val locationPref = prefs.getString("download_location", "MUSIC")
+        val rootDir = if (locationPref == "DOWNLOADS") {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        } else {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        }
+        
+        val deezDir = File(rootDir, "Deeztracker")
+        if (!deezDir.exists()) {
+            deezDir.mkdirs()
+        }
+        return deezDir.absolutePath
+    }
+```
+
+### File Organization
+
+Downloaded tracks are organized with proper metadata:
+- Artist name
+- Album title
+- Track number
+- Album artwork embedded
+
+### Storage Management
+
+View your storage usage in the **Local Music** screen:
+
+- Track count is displayed at the top
+- Total storage used is shown in GB
+- Visual progress bar indicates space consumption
+
+<Warning>
+**Permissions Required**: Deeztracker needs "All Files Access" permission on Android 11+ to download and manage music files. Grant this permission in Settings → Permissions.
+</Warning>
+
+## Common Download Errors and Fixes
+
+<AccordionGroup>
+  <Accordion title="Download Fails Immediately">
+    **Possible causes:**
+    - No internet connection
+    - Invalid ARL token
+    - Selected quality exceeds account permissions
+
+    **Solutions:**
+    1. Check your internet connection
+    2. Verify your ARL token is still valid (try logging out and back in)
+    3. Lower the quality setting to MP3 128kbps
+    4. Check if your Deezer account is active
+  </Accordion>
+
+  <Accordion title="Some Tracks in Album/Playlist Fail">
+    **Possible causes:**
+    - Specific tracks are not available in your region
+    - Copyright restrictions on certain tracks
+    - Tracks have been removed from Deezer
+
+    **Solutions:**
+    1. Check the notification to see how many succeeded vs failed
+    2. Download failed tracks individually to identify specific issues
+    3. Try searching for alternative versions of failed tracks
+  </Accordion>
+
+  <Accordion title="Downloads Are Slow">
+    **Possible causes:**
+    - Slow internet connection
+    - Large file sizes (FLAC/320kbps)
+    - Server limitations
+
+    **Solutions:**
+    1. Switch to a faster WiFi network
+    2. Lower the quality setting temporarily
+    3. Download during off-peak hours
+    4. Download one item at a time instead of bulk downloads
+  </Accordion>
+
+  <Accordion title="Downloaded Files Not Appearing">
+    **Possible causes:**
+    - MediaStore not updated yet
+    - File permissions issue
+    - Files saved to unexpected location
+
+    **Solutions:**
+    1. Tap the refresh button (↻) on the Local Music or Downloads screen
+    2. Check the download location in Settings
+    3. Verify "All Files Access" permission is granted
+    4. Restart the app to trigger a fresh scan
+  </Accordion>
+
+  <Accordion title="Duplicate Downloads">
+    **Issue**: Same track downloaded multiple times
+
+    **Solutions:**
+    1. The app normally skips already-downloaded tracks automatically
+    2. Manually delete duplicates from the Downloads screen
+    3. If duplicates persist, the title/artist metadata might differ slightly
+  </Accordion>
+
+  <Accordion title="Error: Storage Permission Denied">
+    **Solutions:**
+    1. Go to Android Settings → Apps → Deeztracker
+    2. Tap Permissions → Files and Media
+    3. Select "Allow management of all files"
+    4. Return to the app and retry the download
+  </Accordion>
+</AccordionGroup>
+
+## Download Tips
+
+<Card title="Best Practices" icon="lightbulb">
+- **Use WiFi** for large downloads (albums/playlists) to avoid mobile data charges
+- **Download overnight** for very large collections
+- **Lower quality** if storage is limited (128kbps uses ~1MB per minute)
+- **Organize with playlists** after downloading for easier management
+- **Regular cleanup** of the Downloads folder to free up space
+</Card>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Play Downloaded Music" icon="play" href="/guide/playing-music">
+    Learn how to access and play your downloaded tracks
+  </Card>
+  <Card title="Manage Playlists" icon="list" href="/guide/managing-playlists">
+    Organize your music into custom playlists
+  </Card>
+</CardGroup>

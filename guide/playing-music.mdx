@@ -1,0 +1,363 @@
+---
+title: Playing Music
+description: Learn how to play your downloaded music, use player controls, and view synchronized lyrics
+---
+
+## Overview
+
+Once you've downloaded music, you can play it offline through Deeztracker Mobile's built-in player. The app provides a full-featured music player with queue management, shuffle, repeat, and synchronized lyrics.
+
+## Accessing Your Local Library
+
+Your downloaded music is available in the **Local Music** screen:
+
+<Steps>
+  <Step title="Open Local Music">
+    Tap the **Local Music** icon in the bottom navigation bar.
+  </Step>
+
+  <Step title="Browse Your Collection">
+    Use the tabs to view your music by:
+    - **Songs**: All downloaded tracks
+    - **Albums**: Grouped by album
+    - **Artists**: Organized by artist
+    - **Playlists**: Your custom playlists
+  </Step>
+
+  <Step title="Search Your Library">
+    Use the search bar at the top to quickly find specific tracks, albums, or artists in your local collection.
+  </Step>
+</Steps>
+
+## Playing Tracks from Local Music
+
+### Starting Playback
+
+<Steps>
+  <Step title="Select a Track">
+    - Navigate to the **Songs** tab
+    - Browse or search for a track
+    - Tap on the track to start playback
+  </Step>
+
+  <Step title="Mini Player Appears">
+    A mini player bar appears at the bottom showing:
+    - Album artwork
+    - Track title and artist
+    - Play/pause button
+    - Next track button
+  </Step>
+
+  <Step title="Open Full Player">
+    Tap the mini player or swipe up to expand to the full player screen.
+  </Step>
+</Steps>
+
+### Playing from Albums
+
+1. Switch to the **Albums** tab
+2. Tap an album to view all its tracks
+3. Tap any track to start playing that album
+4. Use the **Play** or **Shuffle** button to play the entire album
+
+### Playing from Artists
+
+1. Switch to the **Artists** tab
+2. Tap an artist to see their albums and songs
+3. Select a track to start playback with that artist's music as the queue
+
+```kotlin LocalMusicScreen.kt:560-568
+items(tracks) { track ->
+    LocalTrackItem(
+        track = track,
+        onShare = { onShare(track) },
+        onDelete = { onDelete(track) },
+        onEdit = { onEdit(track) },
+        onAddToPlaylist = { onAddToPlaylist(track) },
+        onClick = { onTrackClick(track, tracks) }
+    )
+}
+```
+
+## Using Player Controls
+
+The full music player provides comprehensive playback controls:
+
+### Basic Controls
+
+| Control | Function |
+|---------|----------|
+| **Play/Pause** | Toggle playback (center button) |
+| **Previous** | Skip to previous track or restart current track |
+| **Next** | Skip to next track in queue |
+| **Seek Bar** | Drag to jump to any position in the track |
+| **Collapse** | Tap down arrow to minimize player |
+
+### Advanced Controls
+
+<AccordionGroup>
+  <Accordion title="Shuffle Mode">
+    - Tap the shuffle icon (🔀) to enable/disable shuffle
+    - When enabled, tracks play in random order
+    - Shuffle state persists across app sessions
+    - Icon appears in primary color when active
+
+    ```kotlin MusicPlayerScreen.kt:287-293
+    IconButton(onClick = { playerController.setShuffle(!playerState.isShuffleEnabled) }) {
+        Icon(
+            Icons.Default.Shuffle, 
+            contentDescription = stringResource(R.string.player_shuffle), 
+            tint = if(playerState.isShuffleEnabled) Primary else TextGray
+        )
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Repeat Modes">
+    Tap the repeat icon to cycle through three modes:
+    
+    1. **Repeat Off**: Playback stops after queue ends (gray icon)
+    2. **Repeat All**: Queue repeats indefinitely (blue icon with circular arrow)
+    3. **Repeat One**: Current track repeats (blue icon with "1")
+
+    ```kotlin MusicPlayerScreen.kt:333-340
+    IconButton(onClick = { playerController.toggleRepeatMode() }) {
+        val (icon, tint) = when (playerState.repeatMode) {
+            RepeatMode.ONE -> Icons.Default.RepeatOne to Primary
+            RepeatMode.ALL -> Icons.Default.Repeat to Primary
+            else -> Icons.Default.Repeat to TextGray
+        }
+        Icon(icon, contentDescription = stringResource(R.string.player_repeat), tint = tint)
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Favorite Tracks">
+    - Tap the heart icon to add/remove from Favorites playlist
+    - Filled heart (❤️) indicates track is favorited
+    - Outline heart (🤍) indicates not favorited
+    - Favorites are accessible from the Playlists tab
+  </Accordion>
+</AccordionGroup>
+
+## Creating and Managing Queue
+
+### Understanding the Queue
+
+When you play a track, Deeztracker creates a playback queue:
+
+- **From Songs tab**: All visible songs become the queue
+- **From Album**: All album tracks in order
+- **From Playlist**: All playlist tracks in order
+- **From Artist**: All artist tracks
+
+### Queue Context Display
+
+The player shows where you're playing from:
+
+```kotlin MusicPlayerScreen.kt:143-156
+Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+) {
+    Text(
+        text = stringResource(R.string.player_playing_from),
+        color = TextGray,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.sp
+    )
+    MarqueeText(
+        text = playerState.playingSource,  // e.g., "Local Music", "Album Name"
+```
+
+### Managing Queue Behavior
+
+- **Shuffle**: Randomizes the current queue order
+- **Repeat All**: Restarts queue from beginning when finished
+- **Repeat One**: Stays on current track indefinitely
+
+<Info>
+The queue is maintained even when you navigate away from the player. Background playback continues until you stop it or close the app.
+</Info>
+
+## Viewing Synchronized Lyrics
+
+Deeztracker Mobile fetches and displays synchronized lyrics from LRCLib:
+
+<Steps>
+  <Step title="Open Player">
+    Start playing any track and expand to the full player screen.
+  </Step>
+
+  <Step title="Swipe to Lyrics">
+    Swipe left on the player screen to access the lyrics view (or it may be a separate page depending on the UI design).
+  </Step>
+
+  <Step title="View Synced Lyrics">
+    - Lyrics automatically scroll and highlight in sync with playback
+    - Current line is highlighted in white
+    - Past lines appear dimmed
+    - Tap any lyric line to jump to that position in the track
+  </Step>
+</Steps>
+
+```kotlin MusicPlayerScreen.kt:400-407
+LyricsScreen(
+    lyrics = playerState.lyrics,
+    currentIndex = playerState.currentLyricIndex,
+    isLoading = playerState.isLoadingLyrics,
+    onLineClick = { position ->
+        playerController.seekTo(position)
+    }
+)
+```
+
+### Lyrics Features
+
+- **Auto-sync**: Lyrics automatically highlight as the song plays
+- **Tap to seek**: Tap any line to jump to that moment
+- **Auto-fetch**: Lyrics are fetched from LRCLib API when a track starts
+- **Offline caching**: Once fetched, lyrics are cached for offline viewing
+
+<Note>
+Not all tracks have synchronized lyrics available. If lyrics aren't found, the lyrics view will indicate "No lyrics available."
+</Note>
+
+## Background Playback
+
+Deeztracker supports full background playback:
+
+### Background Playback Features
+
+- **Continues when screen is off**: Music plays even when device is locked
+- **Notification controls**: Play/pause, skip, and track info in notification shade
+- **Lock screen controls**: Full controls available on lock screen
+- **Survives navigation**: Music continues when you browse other parts of the app
+
+### Music Service
+
+Playback is managed by a persistent foreground service:
+
+```kotlin MusicService.kt
+class MusicService : Service() {
+    // Foreground service ensures playback continues
+    // even when app is in background
+}
+```
+
+### Notification Controls
+
+While music is playing, you'll see a notification with:
+- Album artwork
+- Track title and artist
+- Play/pause button
+- Previous/next buttons
+- Close button to stop playback
+
+## Player Tips and Shortcuts
+
+<Card title="Pro Tips" icon="star">
+  - **Double-tap play**: In most views, double-tapping a track starts playback immediately
+  - **Swipe mini player**: Swipe the mini player left to skip tracks
+  - **Long-press for menu**: Long-press tracks for quick actions (add to playlist, share, etc.)
+  - **Fast scrolling**: Use the alphabetical scroller on the right side of song lists
+</Card>
+
+## Playback Formats Supported
+
+Deeztracker's player supports all common audio formats:
+
+- **FLAC**: Lossless audio (blue badge)
+- **MP3**: Most common format (gray badge)
+- **AAC/M4A**: Apple audio format
+- **WAV**: Uncompressed audio (amber badge)
+
+```kotlin LocalMusicScreen.kt:880-904
+@Composable
+fun FormatBadge(mimeType: String) {
+    val (text, color) = when {
+        mimeType.contains("flac") -> "FLAC" to Color(0xFF00A2E8) // Blue
+        mimeType.contains("wav") -> "WAV" to Color(0xFFFFC107) // Amber
+        mimeType.contains("mpeg") || mimeType.contains("mp3") -> "MP3" to TextGray
+        mimeType.contains("mp4") || mimeType.contains("aac") -> "AAC" to TextGray
+        else -> "AUDIO" to TextGray
+    }
+    // ...
+}
+```
+
+## Common Playback Issues
+
+<AccordionGroup>
+  <Accordion title="Track Won't Play">
+    **Possible causes:**
+    - Corrupted download
+    - File was moved or deleted
+    - Unsupported format
+
+    **Solutions:**
+    1. Try playing a different track to isolate the issue
+    2. Delete and re-download the problematic track
+    3. Check if the file exists in your download folder
+    4. Tap refresh on the Local Music screen
+  </Accordion>
+
+  <Accordion title="Playback Stutters or Skips">
+    **Possible causes:**
+    - Device low on resources
+    - Other apps using audio
+    - Corrupted file
+
+    **Solutions:**
+    1. Close other apps to free up memory
+    2. Restart the app
+    3. Re-download the track if issue persists
+    4. Check if device storage is full
+  </Accordion>
+
+  <Accordion title="Lyrics Not Loading">
+    **Possible causes:**
+    - No internet connection (first fetch only)
+    - Lyrics not available for this track
+    - Track metadata is incorrect
+
+    **Solutions:**
+    1. Ensure internet connection for initial lyrics fetch
+    2. Check if track title and artist are correct
+    3. Try manually searching for lyrics online
+    4. Some tracks simply don't have synced lyrics available
+  </Accordion>
+
+  <Accordion title="Background Playback Stops">
+    **Possible causes:**
+    - Battery optimization killing service
+    - Android memory management
+    - Notification dismissed
+
+    **Solutions:**
+    1. Disable battery optimization for Deeztracker:
+       - Android Settings → Apps → Deeztracker → Battery → Unrestricted
+    2. Don't swipe away the playback notification
+    3. Keep the app in recent apps list
+  </Accordion>
+
+  <Accordion title="Controls Not Responding">
+    **Solutions:**
+    1. Tap the area again (may be touch registration issue)
+    2. Close and reopen the player
+    3. Restart the app if issue persists
+    4. Check for app updates
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Manage Playlists" icon="list" href="/guide/managing-playlists">
+    Create and organize custom playlists for your music
+  </Card>
+  <Card title="Configure Settings" icon="gear" href="/guide/settings">
+    Adjust audio quality and other preferences
+  </Card>
+</CardGroup>

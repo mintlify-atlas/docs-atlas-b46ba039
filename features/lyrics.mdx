@@ -1,0 +1,569 @@
+---
+title: Synchronized Lyrics
+description: Display time-synchronized lyrics with LrcLib API integration and real-time scrolling
+icon: music
+---
+
+## Overview
+
+Deeztracker Mobile features synchronized lyrics powered by the LrcLib API. Lyrics automatically scroll and highlight in sync with the currently playing track, supporting both synced (LRC format) and plain lyrics.
+
+## LrcLib API Integration
+
+The `LyricsRepository` handles all lyrics fetching and caching:
+
+```kotlin
+class LyricsRepository(private val context: Context) {
+    private val api: LrcLibApi
+    
+    init {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+        
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://lrclib.net/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        
+        api = retrofit.create(LrcLibApi::class.java)
+    }
+}
+```
+
+### API Endpoints
+
+```kotlin
+interface LrcLibApi {
+    @GET("api/get")
+    suspend fun getLyrics(
+        @Query("track_name") trackName: String,
+        @Query("artist_name") artistName: String,
+        @Query("album_name") albumName: String? = null,
+        @Query("duration") duration: Double? = null
+    ): LrcLibResponse
+    
+    @GET("api/search")
+    suspend fun search(
+        @Query("q") query: String? = null,
+        @Query("track_name") trackName: String? = null,
+        @Query("artist_name") artistName: String? = null,
+        @Query("album_name") albumName: String? = null
+    ): List<LrcLibResponse>
+}
+```
+
+### Response Model
+
+```kotlin
+data class LrcLibResponse(
+    val id: Long?,
+    val name: String?,
+    val trackName: String?,
+    val artistName: String?,
+    val albumName: String?,
+    val duration: Double?,
+    val instrumental: Boolean?,
+    val plainLyrics: String?,
+    val syncedLyrics: String?  // LRC format with timestamps
+)
+```
+
+## Lyrics Fetching Strategy
+
+Deeztracker uses a multi-strategy approach to find the best lyrics:
+
+```kotlin
+suspend fun getLyrics(track: LocalTrack): String? {
+    val cacheFile = getCacheFile(track)
+    
+    // 1. Check Cache
+    if (cacheFile.exists()) {
+        val cachedContent = cacheFile.readText()
+        if (cachedContent != "NOT_FOUND" && cachedContent.isNotBlank()) {
+            return cachedContent
+        }
+        cacheFile.delete()
+    }
+    
+    val durationSeconds = track.duration / 1000.0
+    
+    // 2. Step A: Exact Match (Title, Artist, Album, Duration)
+    val strictResponse = safeApiCall(
+        track.title,
+        track.artist,
+        track.album,
+        durationSeconds
+    )
+    
+    if (!strictResponse?.syncedLyrics.isNullOrBlank()) {
+        val lyrics = strictResponse!!.syncedLyrics!!
+        saveToCache(cacheFile, lyrics)
+        return lyrics
+    }
+    
+    // 3. Step B: Fuzzy Search
+    val searchResults = safeSearch("${track.title} ${track.artist}")
+    val bestSynced = searchResults.take(5)
+        .firstNotNullOfOrNull { it.syncedLyrics.takeIf { s -> !s.isNullOrBlank() } }
+    
+    if (bestSynced != null) {
+        saveToCache(cacheFile, bestSynced)
+        return bestSynced
+    }
+    
+    // 4. Step C: Fallback to Plain Lyrics
+    val bestPlain = strictResponse?.plainLyrics.takeIf { !it.isNullOrBlank() }
+        ?: searchResults.firstNotNullOfOrNull { 
+            it.plainLyrics.takeIf { s -> !s.isNullOrBlank() } 
+        }
+    
+    if (bestPlain != null) {
+        saveToCache(cacheFile, bestPlain)
+        return bestPlain
+    }
+    
+    return null
+}
+```
+
+### Search Priority
+
+1. **Local cache** - Instant retrieval
+2. **Exact match** - Uses track metadata for precise matching
+3. **Fuzzy search** - Searches top 5 results for synced lyrics
+4. **Plain lyrics fallback** - Returns unsynced lyrics if available
+
+<Info>
+The system prioritizes synced lyrics over plain lyrics for the best user experience.
+</Info>
+
+## Retry Logic with Exponential Backoff
+
+Network requests use automatic retry with exponential backoff:
+
+```kotlin
+private suspend fun <T> retryWithBackoff(
+    maxRetries: Int = 3,
+    initialDelay: Long = 500L,
+    operation: String,
+    block: suspend () -> T
+): T? {
+    var currentDelay = initialDelay
+    repeat(maxRetries) { attempt ->
+        try {
+            return block()
+        } catch (e: Exception) {
+            if (attempt == maxRetries - 1) {
+                Log.e(TAG, "$operation failed after $maxRetries attempts", e)
+                return null
+            }
+            Log.w(TAG, "$operation attempt ${attempt + 1} failed. Retrying in ${currentDelay}ms...")
+            delay(currentDelay)
+            currentDelay *= 2  // Exponential backoff
+        }
+    }
+    return null
+}
+```
+
+<Tip>
+Exponential backoff prevents overwhelming the API during temporary network issues.
+</Tip>
+
+## Lyrics Caching
+
+### Cache Location
+
+```kotlin
+private fun getCacheFile(track: LocalTrack): File {
+    val cacheDir = File(context.cacheDir, "lyrics")
+    if (!cacheDir.exists()) {
+        cacheDir.mkdirs()
+    }
+    // Sanitize filename to avoid IO issues
+    val safeArtist = track.artist.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+    val safeTitle = track.title.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+    return File(cacheDir, "${safeArtist}_${safeTitle}.lrc")
+}
+```
+
+### Cache Strategy
+
+- **Location**: `/data/data/com.crowstar.deeztrackermobile/cache/lyrics/`
+- **Format**: `Artist_Title.lrc`
+- **Sanitization**: Non-alphanumeric characters replaced with underscores
+- **Invalidation**: "NOT_FOUND" entries are deleted and refetched
+
+```kotlin
+private fun saveToCache(file: File, content: String) {
+    try {
+        file.writeText(content)
+    } catch (e: IOException) {
+        Log.e("LyricsRepository", "Failed to cache lyrics", e)
+    }
+}
+```
+
+## LRC Format Parsing
+
+The `LrcParser` converts LRC format strings into structured data:
+
+### LRC Format
+
+```
+[00:12.00]First line of lyrics
+[00:17.20]Second line of lyrics
+[00:21.10]Third line of lyrics
+```
+
+### Parser Implementation
+
+```kotlin
+object LrcParser {
+    private val TIMESTAMP_REGEX = Regex("\\[(\\d+):(\\d+(?:\\.\\d+)?)\\]")
+    
+    fun parse(lrcContent: String): List<LrcLine> {
+        if (lrcContent.isBlank()) return emptyList()
+        
+        val cleanContent = lrcContent.replace("\\n", "\n")
+        val lines = ArrayList<LrcLine>()
+        var foundSyncedLine = false
+        
+        cleanContent.lines().forEach { line ->
+            val trimmedLine = line.trim()
+            if (trimmedLine.isEmpty()) return@forEach
+            
+            val matches = TIMESTAMP_REGEX.findAll(trimmedLine).toList()
+            
+            if (matches.isNotEmpty()) {
+                foundSyncedLine = true
+                val text = trimmedLine.substring(matches.last().range.last + 1).trim()
+                
+                for (match in matches) {
+                    val min = match.groupValues[1].toLongOrNull() ?: 0L
+                    val secStr = match.groupValues[2]
+                    val sec = secStr.toDoubleOrNull() ?: 0.0
+                    
+                    val timeMs = ((min * 60 + sec) * 1000).toLong()
+                    lines.add(LrcLine(timeMs, text))
+                }
+            }
+        }
+        
+        // Fallback: If no timestamps found, treat as plain lyrics
+        if (!foundSyncedLine && lines.isEmpty()) {
+            lrcContent.lines().forEach { line ->
+                if (line.isNotBlank()) {
+                    lines.add(LrcLine(Long.MAX_VALUE, line.trim()))
+                }
+            }
+        }
+        
+        return lines.sortedBy { it.timeMs }
+    }
+}
+```
+
+### LrcLine Model
+
+```kotlin
+data class LrcLine(
+    val timeMs: Long,  // Timestamp in milliseconds
+    val text: String   // Lyric line text
+)
+```
+
+<Note>
+Plain lyrics are assigned `Long.MAX_VALUE` as timestamp to indicate they're not synced.
+</Note>
+
+## Active Line Detection
+
+The parser includes a binary search algorithm for efficient line detection:
+
+```kotlin
+fun getActiveLineIndex(lyrics: List<LrcLine>, positionMs: Long): Int {
+    if (lyrics.isEmpty()) return -1
+    
+    // If plain lyrics (MAX_VALUE), never highlight
+    if (lyrics[0].timeMs == Long.MAX_VALUE) return -1
+    
+    var low = 0
+    var high = lyrics.size - 1
+    var result = -1
+    
+    while (low <= high) {
+        val mid = (low + high) / 2
+        val line = lyrics[mid]
+        
+        if (line.timeMs <= positionMs) {
+            result = mid
+            low = mid + 1
+        } else {
+            high = mid - 1
+        }
+    }
+    return result
+}
+```
+
+<Info>
+Binary search provides O(log n) performance, ensuring smooth updates even with hundreds of lyric lines.
+</Info>
+
+## Player Integration
+
+Lyrics are automatically fetched when a track starts playing:
+
+```kotlin
+private fun fetchLyrics(track: LocalTrack) {
+    // Prevent duplicate fetches
+    if (fetchingForTrackId == track.id && lyricsJob?.isActive == true) {
+        return
+    }
+    
+    lyricsJob?.cancel()
+    fetchingForTrackId = track.id
+    
+    _playerState.update { 
+        it.copy(
+            lyrics = emptyList(),
+            currentLyricIndex = -1,
+            isLoadingLyrics = true
+        )
+    }
+    
+    lyricsJob = GlobalScope.launch {
+        try {
+            val lrcContent = lyricsRepository.getLyrics(track)
+            if (lrcContent != null) {
+                val parsedLyrics = LrcParser.parse(lrcContent)
+                _playerState.update { 
+                    it.copy(
+                        lyrics = parsedLyrics,
+                        isLoadingLyrics = false
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    updateState()
+                }
+            } else {
+                _playerState.update { it.copy(isLoadingLyrics = false) }
+            }
+        } catch (e: Exception) {
+            if (e !is CancellationException) {
+                _playerState.update { it.copy(isLoadingLyrics = false) }
+            }
+        }
+    }
+}
+```
+
+## Real-Time Scrolling
+
+The lyrics screen automatically scrolls to keep the current line visible:
+
+```kotlin
+@Composable
+fun LyricsScreen(
+    lyrics: List<LrcLine>,
+    currentIndex: Int,
+    isLoading: Boolean,
+    onLineClick: (Long) -> Unit
+) {
+    val listState = rememberLazyListState()
+    
+    LaunchedEffect(currentIndex) {
+        if (currentIndex >= 0 && currentIndex < lyrics.size) {
+            listState.animateScrollToItem(
+                index = currentIndex,
+                scrollOffset = -300  // Offset to center the line
+            )
+        }
+    }
+    
+    LazyColumn(
+        state = listState,
+        contentPadding = PaddingValues(vertical = 50.dp, horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        itemsIndexed(lyrics) { index, line ->
+            val isActive = index == currentIndex
+            val color = if (isActive) Color.White else TextGray
+            val fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+            
+            Text(
+                text = line.text,
+                color = color,
+                fontSize = 20.sp,
+                fontWeight = fontWeight,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onLineClick(line.timeMs) },
+                lineHeight = 30.sp
+            )
+        }
+    }
+}
+```
+
+### Interactive Lyrics
+
+Users can click any lyric line to seek to that position:
+
+```kotlin
+LyricsScreen(
+    lyrics = playerState.lyrics,
+    currentIndex = playerState.currentLyricIndex,
+    isLoading = playerState.isLoadingLyrics,
+    onLineClick = { position ->
+        playerController.seekTo(position)
+    }
+)
+```
+
+<Tip>
+Tapping a lyric line instantly seeks to that timestamp in the song.
+</Tip>
+
+## Lyrics UI States
+
+### Loading State
+
+```kotlin
+when {
+    isLoading -> {
+        Box(contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = Primary)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = stringResource(R.string.lyrics_loading),
+                    color = TextGray,
+                    fontSize = 16.sp
+                )
+            }
+        }
+    }
+}
+```
+
+### Empty State
+
+```kotlin
+lyrics.isEmpty() -> {
+    Box(contentAlignment = Alignment.Center) {
+        Text(
+            text = stringResource(R.string.lyrics_not_available),
+            color = TextGray,
+            fontSize = 18.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+```
+
+### Display State
+
+```kotlin
+else -> {
+    LazyColumn {
+        itemsIndexed(lyrics) { index, line ->
+            Text(
+                text = line.text,
+                color = if (index == currentIndex) Color.White else TextGray,
+                fontWeight = if (index == currentIndex) FontWeight.Bold else FontWeight.Normal
+            )
+        }
+    }
+}
+```
+
+## Position Updates
+
+The current lyric index is updated every 100ms:
+
+```kotlin
+private fun updateState() {
+    val player = mediaController ?: return
+    val currentPos = player.currentPosition
+    val lyrics = _playerState.value.lyrics
+    val lyricIndex = LrcParser.getActiveLineIndex(lyrics, currentPos)
+    
+    _playerState.update { 
+        it.copy(
+            currentPosition = currentPos,
+            currentLyricIndex = lyricIndex
+        )
+    }
+}
+```
+
+## Horizontal Pager Integration
+
+The player screen uses a pager to switch between player and lyrics:
+
+```kotlin
+val pagerState = rememberPagerState(pageCount = { 2 })
+
+HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+    if (page == 0) {
+        // Player Page
+        PlayerPageContent(playerState, playerController)
+    } else {
+        // Lyrics Page
+        Column {
+            // Mini track info
+            Row {
+                TrackArtwork(model = track.albumArtUri, modifier = Modifier.size(56.dp))
+                Column {
+                    MarqueeText(text = track.title)
+                    MarqueeText(text = track.artist)
+                }
+            }
+            
+            // Lyrics
+            LyricsScreen(
+                lyrics = playerState.lyrics,
+                currentIndex = playerState.currentLyricIndex,
+                isLoading = playerState.isLoadingLyrics,
+                onLineClick = { position -> playerController.seekTo(position) }
+            )
+        }
+    }
+}
+```
+
+## Best Practices
+
+### Performance
+
+1. **Caching** prevents redundant API calls
+2. **Binary search** for efficient line detection
+3. **Debounced updates** every 100ms
+4. **Lazy loading** in LazyColumn for large lyrics
+
+### Reliability
+
+1. **Multi-strategy search** increases success rate
+2. **Exponential backoff** handles network issues
+3. **Plain lyrics fallback** ensures something displays
+4. **Cancel previous jobs** prevents duplicate fetches
+
+### User Experience
+
+1. **Auto-scrolling** keeps current line visible
+2. **Interactive seeking** via line taps
+3. **Visual highlighting** with color and bold
+4. **Loading indicators** for feedback
+5. **Graceful fallback** for unavailable lyrics
+
+<Warning>
+Always cancel the lyrics job when switching tracks to prevent displaying lyrics from the wrong song.
+</Warning>

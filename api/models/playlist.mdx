@@ -1,0 +1,251 @@
+---
+title: 'Playlist'
+description: 'Playlist data models for both Deezer and local playlists in Deeztracker Mobile'
+---
+
+## Overview
+
+Deeztracker Mobile supports two types of playlists:
+1. **Deezer Playlist** - Playlists from the Deezer API with rich metadata
+2. **Local Playlist** - User-created playlists stored locally on the device
+
+## Deezer Playlist Model
+
+Defined in `app/src/main/java/com/crowstar/deeztrackermobile/features/deezer/DeezerModels.kt`
+
+The Deezer `Playlist` model represents playlists fetched from the Deezer API.
+
+### Properties
+
+<ResponseField name="id" type="Long" required>
+  Unique identifier for the Deezer playlist
+</ResponseField>
+
+<ResponseField name="title" type="String" required>
+  Title of the playlist
+</ResponseField>
+
+<ResponseField name="description" type="String?">
+  Optional description of the playlist
+</ResponseField>
+
+<ResponseField name="duration" type="Int?">
+  Total duration of all tracks in the playlist (in seconds)
+</ResponseField>
+
+<ResponseField name="public" type="Boolean?">
+  Whether the playlist is public or private
+</ResponseField>
+
+<ResponseField name="isLovedTrack" type="Boolean?">
+  Indicates if this is a "Loved Tracks" playlist (serialized as `is_loved_track`)
+</ResponseField>
+
+<ResponseField name="collaborative" type="Boolean?">
+  Whether the playlist is collaborative
+</ResponseField>
+
+<ResponseField name="nbTracks" type="Int?">
+  Number of tracks in the playlist (serialized as `nb_tracks`)
+</ResponseField>
+
+<ResponseField name="fans" type="Int?">
+  Number of fans/followers of the playlist
+</ResponseField>
+
+<ResponseField name="link" type="String?">
+  URL link to the playlist on Deezer
+</ResponseField>
+
+<ResponseField name="share" type="String?">
+  Shareable URL for the playlist
+</ResponseField>
+
+<ResponseField name="picture" type="String?">
+  URL to the playlist cover image (default size)
+</ResponseField>
+
+<ResponseField name="pictureSmall" type="String?">
+  URL to the small playlist cover image (serialized as `picture_small`)
+</ResponseField>
+
+<ResponseField name="pictureMedium" type="String?">
+  URL to the medium playlist cover image (serialized as `picture_medium`)
+</ResponseField>
+
+<ResponseField name="pictureBig" type="String?">
+  URL to the large playlist cover image (serialized as `picture_big`)
+</ResponseField>
+
+<ResponseField name="pictureXl" type="String?">
+  URL to the extra-large playlist cover image (serialized as `picture_xl`)
+</ResponseField>
+
+<ResponseField name="checksum" type="String?">
+  Checksum value for the playlist
+</ResponseField>
+
+<ResponseField name="tracklist" type="String?">
+  API endpoint URL to fetch the playlist's tracks
+</ResponseField>
+
+<ResponseField name="creationDate" type="String?">
+  Date when the playlist was created (serialized as `creation_date`)
+</ResponseField>
+
+<ResponseField name="creator" type="UserMini?">
+  User object representing the creator of the playlist
+</ResponseField>
+
+<ResponseField name="type" type="String?">
+  Type identifier (typically "playlist")
+</ResponseField>
+
+<ResponseField name="tracks" type="TrackListResponse?">
+  Response object containing the list of tracks in the playlist
+</ResponseField>
+
+## Local Playlist Model
+
+Defined in `app/src/main/java/com/crowstar/deeztrackermobile/features/localmusic/LocalPlaylist.kt`
+
+The `LocalPlaylist` model represents user-created playlists stored locally on the device.
+
+### Properties
+
+<ResponseField name="id" type="String" default="UUID.randomUUID().toString()">
+  Unique identifier for the local playlist. Automatically generated as a UUID if not provided.
+</ResponseField>
+
+<ResponseField name="name" type="String" required>
+  Name of the playlist
+</ResponseField>
+
+<ResponseField name="trackIds" type="List<Long>" default="emptyList()">
+  List of Deezer track IDs contained in the playlist. Defaults to an empty list.
+</ResponseField>
+
+## Example Usage
+
+### Deezer Playlist Example
+
+```kotlin
+import com.crowstar.deeztrackermobile.features.deezer.Playlist
+import com.crowstar.deeztrackermobile.features.deezer.UserMini
+
+val deezerPlaylist = Playlist(
+    id = 123456789L,
+    title = "Top Hits 2024",
+    description = "The best hits of 2024",
+    duration = 7200, // 2 hours in seconds
+    public = true,
+    isLovedTrack = false,
+    collaborative = false,
+    nbTracks = 50,
+    fans = 125000,
+    link = "https://www.deezer.com/playlist/123456789",
+    picture = "https://api.deezer.com/playlist/123456789/image",
+    pictureMedium = "https://e-cdns-images.dzcdn.net/images/playlist/medium.jpg",
+    creationDate = "2024-01-01",
+    creator = UserMini(
+        id = 987654321L,
+        name = "DJ Music Lover"
+    ),
+    type = "playlist"
+)
+```
+
+### Local Playlist Example
+
+```kotlin
+import com.crowstar.deeztrackermobile.features.localmusic.LocalPlaylist
+
+// Create a new empty playlist
+val newPlaylist = LocalPlaylist(
+    name = "My Favorites"
+)
+// id is auto-generated, trackIds defaults to emptyList()
+
+// Create a playlist with tracks
+val playlistWithTracks = LocalPlaylist(
+    id = "custom-id-123",
+    name = "Workout Mix",
+    trackIds = listOf(111111L, 222222L, 333333L, 444444L)
+)
+```
+
+### Adding Tracks to Local Playlist
+
+```kotlin
+val playlist = LocalPlaylist(
+    name = "Chill Vibes",
+    trackIds = listOf(123L, 456L)
+)
+
+// Add a new track
+val updatedPlaylist = playlist.copy(
+    trackIds = playlist.trackIds + 789L
+)
+
+// Remove a track
+val playlistWithoutTrack = playlist.copy(
+    trackIds = playlist.trackIds.filter { it != 456L }
+)
+```
+
+## Source Code
+
+### Deezer Playlist
+
+```kotlin
+data class Playlist(
+    val id: Long,
+    val title: String,
+    val description: String? = null,
+    val duration: Int? = null,
+    val public: Boolean? = null,
+    @SerializedName("is_loved_track") val isLovedTrack: Boolean? = null,
+    val collaborative: Boolean? = null,
+    @SerializedName("nb_tracks") val nbTracks: Int? = null,
+    val fans: Int? = null,
+    val link: String? = null,
+    val share: String? = null,
+    val picture: String? = null,
+    @SerializedName("picture_small") val pictureSmall: String? = null,
+    @SerializedName("picture_medium") val pictureMedium: String? = null,
+    @SerializedName("picture_big") val pictureBig: String? = null,
+    @SerializedName("picture_xl") val pictureXl: String? = null,
+    @SerializedName("checksum") val checksum: String? = null,
+    val tracklist: String? = null,
+    @SerializedName("creation_date") val creationDate: String? = null,
+    @SerializedName("creator") val creator: UserMini? = null,
+    val type: String? = null,
+    val tracks: TrackListResponse? = null
+)
+```
+
+### Local Playlist
+
+```kotlin
+data class LocalPlaylist(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val trackIds: List<Long> = emptyList()
+)
+```
+
+## Differences Between Playlist Types
+
+| Feature | Deezer Playlist | Local Playlist |
+|---------|----------------|----------------|
+| ID Type | `Long` | `String` (UUID) |
+| Track Storage | Full `Track` objects via API | Track IDs only |
+| Metadata | Rich (description, fans, creator) | Minimal (name only) |
+| Images | Multiple sizes available | None |
+| Source | Deezer API | Local storage |
+| Mutability | Read-only from API | Fully editable by user |
+
+## Related Models
+
+- [Track](/api/models/track) - Track model referenced by playlists
+- [Album](/api/models/album) - Album model, another way to organize tracks

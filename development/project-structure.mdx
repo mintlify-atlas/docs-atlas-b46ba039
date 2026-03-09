@@ -1,0 +1,906 @@
+---
+title: Project Structure
+description: Complete directory layout and file organization of Deeztracker Mobile
+---
+
+## Root Directory
+
+```
+deeztracker-mobile/
+├── app/                    # Android application module
+├── rusteer/                # Rust library for Deezer integration
+├── gradle/                 # Gradle wrapper files
+├── preview/                # App screenshots
+├── .github/                # GitHub Actions CI/CD
+├── build.gradle.kts        # Root build configuration
+├── settings.gradle.kts     # Project settings
+├── gradle.properties       # Gradle properties
+├── gradlew                 # Gradle wrapper script (Unix)
+├── gradlew.bat             # Gradle wrapper script (Windows)
+├── README.md               # Project documentation
+└── LICENSE                 # MIT License
+```
+
+---
+
+## App Module Structure
+
+The `app/` directory contains the main Android application:
+
+```
+app/
+├── build.gradle.kts        # App-level build configuration
+├── proguard-rules.pro      # ProGuard/R8 rules
+└── src/
+    ├── main/
+    │   ├── java/           # Kotlin source code
+    │   ├── res/            # Android resources
+    │   └── AndroidManifest.xml
+    ├── debug/              # Debug-specific resources
+    └── release/            # Release-specific resources
+```
+
+### Build Configuration
+
+<CodeGroup>
+```kotlin app/build.gradle.kts (Key sections)
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
+android {
+    namespace = "com.crowstar.deeztrackermobile"
+    compileSdk = 34
+    
+    defaultConfig {
+        applicationId = "com.crowstar.deeztrackermobile"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 5
+        versionName = "1.1.1"
+    }
+    
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.4"
+    }
+}
+```
+
+```properties gradle.properties
+android.useAndroidX=true
+android.enableJetifier=true
+kotlin.code.style=official
+org.gradle.jvmargs=-Xmx2048m
+```
+</CodeGroup>
+
+---
+
+## Source Code Organization
+
+The main package is `com.crowstar.deeztrackermobile` located at:
+
+```
+app/src/main/java/com/crowstar/deeztrackermobile/
+```
+
+### Package Structure
+
+<Tabs>
+  <Tab title="Overview">
+    ```
+    com.crowstar.deeztrackermobile/
+    ├── MainActivity.kt           # App entry point
+    ├── data/                     # Data models
+    ├── features/                 # Feature modules
+    ├── navigation/               # Navigation configuration
+    ├── player/                   # Legacy player (deprecated)
+    └── ui/                       # UI layer (Compose)
+    ```
+  </Tab>
+  
+  <Tab title="Features">
+    ```
+    features/
+    ├── deezer/                   # Deezer API integration
+    │   ├── DeezerApiService.kt   # Retrofit API interface
+    │   ├── DeezerModels.kt       # API response models
+    │   └── DeezerRepository.kt   # Repository pattern
+    ├── download/                 # Download management
+    │   ├── DownloadManager.kt    # Download orchestration
+    │   └── DownloadState.kt      # Download state models
+    ├── localmusic/               # Local music library
+    │   ├── LocalMusicRepository.kt    # MediaStore integration
+    │   ├── LocalMusicModels.kt        # Local track/album models
+    │   ├── LocalPlaylistRepository.kt # Playlist management
+    │   ├── LocalPlaylist.kt           # Playlist data class
+    │   └── MetadataEditor.kt          # ID3 tag editing
+    ├── lyrics/                   # Lyrics functionality
+    │   ├── LrcLibApi.kt          # LrcLib API client
+    │   ├── LrcLibModels.kt       # Lyrics models
+    │   ├── LrcParser.kt          # LRC format parser
+    │   └── LyricsRepository.kt   # Lyrics data source
+    ├── player/                   # Music playback
+    │   ├── MusicService.kt       # Media3 foreground service
+    │   ├── PlayerController.kt   # Playback controller
+    │   ├── PlayerState.kt        # Player state models
+    │   └── CustomBitmapLoader.kt # Album art loader
+    ├── preview/                  # Track preview player
+    │   └── PreviewPlayer.kt      # 30-second preview
+    └── rusteer/                  # Rust FFI bindings
+        ├── RustDeezerService.kt  # Kotlin wrapper
+        └── rusteer.kt            # UniFFI generated code
+    ```
+  </Tab>
+  
+  <Tab title="UI">
+    ```
+    ui/
+    ├── components/               # Reusable components
+    │   ├── AddToPlaylistBottomSheet.kt
+    │   ├── AlphabeticalFastScroller.kt
+    │   ├── CreatePlaylistDialog.kt
+    │   ├── EditPlaylistDialog.kt
+    │   ├── EditTrackDialog.kt
+    │   ├── MarqueeText.kt
+    │   ├── TrackArtwork.kt
+    │   ├── TrackDetailsDialog.kt
+    │   └── TrackPreviewButton.kt
+    ├── screens/                  # Full-page screens
+    │   ├── AlbumScreen.kt        # Album details
+    │   ├── AlbumViewModel.kt
+    │   ├── ArtistScreen.kt       # Artist profile
+    │   ├── ArtistViewModel.kt
+    │   ├── DownloadsScreen.kt    # Downloads management
+    │   ├── DownloadsViewModel.kt
+    │   ├── ImportPlaylistScreen.kt
+    │   ├── LocalAlbumDetailScreen.kt
+    │   ├── LocalArtistDetailScreen.kt
+    │   ├── LocalMusicScreen.kt   # Local library
+    │   ├── LocalMusicViewModel.kt
+    │   ├── LocalPlaylistDetailScreen.kt
+    │   ├── LocalPlaylistsScreen.kt
+    │   ├── LoginScreen.kt        # ARL authentication
+    │   ├── LyricsScreen.kt       # Synchronized lyrics
+    │   ├── MainScreen.kt         # Main container
+    │   ├── PlaylistScreen.kt     # Playlist details
+    │   ├── PlaylistViewModel.kt
+    │   ├── SearchScreen.kt       # Search interface
+    │   ├── SettingsScreen.kt     # App settings
+    │   └── SettingsViewModel.kt
+    ├── theme/                    # Material 3 theme
+    │   ├── Color.kt              # Color palette
+    │   ├── Theme.kt              # Theme configuration
+    │   └── Type.kt               # Typography
+    └── utils/                    # UI utilities
+        └── TimeUtils.kt          # Time formatting
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Key Files and Their Purpose
+
+### Entry Point
+
+<CodeGroup>
+```kotlin MainActivity.kt
+package com.crowstar.deeztrackermobile
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.crowstar.deeztrackermobile.navigation.AppNavigation
+import com.crowstar.deeztrackermobile.ui.theme.DeezTrackerTheme
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
+        super.onCreate(savedInstanceState)
+        
+        setContent {
+            DeezTrackerTheme {
+                AppNavigation()
+            }
+        }
+    }
+}
+```
+
+```xml AndroidManifest.xml (Key permissions)
+<manifest>
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    
+    <application
+        android:name=".DeezTrackerApplication"
+        android:icon="@drawable/ic_app_icon"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.DeezTrackerMobile">
+        
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        
+        <service
+            android:name=".features.player.MusicService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+    </application>
+</manifest>
+```
+</CodeGroup>
+
+### Navigation
+
+```kotlin navigation/AppNavigation.kt
+@Composable
+fun AppNavigation() {
+    val navController = rememberNavController()
+    val context = LocalContext.current
+    val rustService = remember { RustDeezerService(context) }
+    val startDestination = if (rustService.isLoggedIn()) "main" else "login"
+    
+    NavHost(navController, startDestination) {
+        composable("login") { LoginScreen(...) }
+        composable("main") { MainScreen(...) }
+        composable("artist/{artistId}") { ArtistScreen(...) }
+        composable("album/{albumId}") { AlbumScreen(...) }
+        composable("playlist/{playlistId}") { PlaylistScreen(...) }
+        composable("import_playlist") { ImportPlaylistScreen(...) }
+    }
+}
+```
+
+### Feature-Specific Files
+
+<AccordionGroup>
+  <Accordion title="Deezer API Integration" icon="music">
+    **Location**: `features/deezer/`
+    
+    - `DeezerApiService.kt` - Retrofit interface for Deezer public API
+    - `DeezerRepository.kt` - Repository pattern wrapper
+    - `DeezerModels.kt` - Data classes for API responses
+    
+    **Base URL**: `https://api.deezer.com/`
+    
+    **Key endpoints**:
+    ```kotlin
+    interface DeezerApiService {
+        @GET("search/track")
+        suspend fun searchTracks(@Query("q") query: String): TrackSearchResponse
+        
+        @GET("album/{id}")
+        suspend fun getAlbum(@Path("id") id: Long): Album
+        
+        @GET("album/{id}/tracks")
+        suspend fun getAlbumTracks(@Path("id") id: Long): TrackListResponse
+        
+        @GET("artist/{id}")
+        suspend fun getArtist(@Path("id") id: Long): Artist
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Download Management" icon="download">
+    **Location**: `features/download/`
+    
+    - `DownloadManager.kt` - Singleton orchestrating all downloads
+    - `DownloadState.kt` - Sealed classes for download states
+    
+    **Features**:
+    - Sequential download queue (prevents concurrent downloads)
+    - Duplicate detection
+    - MediaStore scanning after download
+    - Quality selection (FLAC, MP3_320, MP3_128)
+    - Configurable output directory
+    
+    **State machine**:
+    ```kotlin
+    sealed class DownloadState {
+        object Idle : DownloadState()
+        data class Downloading(
+            val type: DownloadType,
+            val title: String,
+            val itemId: String,
+            val currentTrackId: String? = null
+        ) : DownloadState()
+        data class Completed(
+            val type: DownloadType,
+            val title: String,
+            val successCount: Int,
+            val failedCount: Int = 0,
+            val skippedCount: Int = 0
+        ) : DownloadState()
+        data class Error(val title: String, val message: String) : DownloadState()
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Local Music Library" icon="folder-music">
+    **Location**: `features/localmusic/`
+    
+    - `LocalMusicRepository.kt` - MediaStore queries
+    - `LocalPlaylistRepository.kt` - Custom playlist management
+    - `LocalMusicModels.kt` - Data classes for local tracks/albums
+    - `MetadataEditor.kt` - JAudioTagger integration for ID3 editing
+    
+    **MediaStore queries**:
+    ```kotlin
+    suspend fun getAllTracks(): List<LocalTrack> {
+        val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DATA,  // File path
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.ALBUM_ID
+        )
+        // Query and parse results...
+    }
+    ```
+    
+    **Playlist storage**: JSON in SharedPreferences (`playlists` pref file)
+  </Accordion>
+  
+  <Accordion title="Lyrics" icon="closed-captioning">
+    **Location**: `features/lyrics/`
+    
+    - `LrcLibApi.kt` - LrcLib.net API client
+    - `LyricsRepository.kt` - Lyrics fetching and caching
+    - `LrcParser.kt` - LRC format parser with timestamp sync
+    - `LrcLibModels.kt` - API response models
+    
+    **LRC format example**:
+    ```lrc
+    [00:12.00]Line 1 of lyrics
+    [00:17.20]Line 2 of lyrics
+    [00:21.10]Line 3 of lyrics
+    ```
+    
+    **Parsing logic**:
+    ```kotlin
+    data class LyricLine(val timeMs: Long, val text: String)
+    
+    object LrcParser {
+        fun parse(lrcContent: String): List<LyricLine> {
+            // Parse [mm:ss.xx] timestamps and text
+        }
+        
+        fun getActiveLineIndex(lyrics: List<LyricLine>, positionMs: Long): Int {
+            // Binary search for current lyric based on playback position
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Music Player" icon="play">
+    **Location**: `features/player/`
+    
+    - `MusicService.kt` - Media3 foreground service
+    - `PlayerController.kt` - Singleton managing playback state
+    - `PlayerState.kt` - Player state data class
+    - `CustomBitmapLoader.kt` - Album art loading for notifications
+    
+    **PlayerState**:
+    ```kotlin
+    data class PlayerState(
+        val currentTrack: LocalTrack? = null,
+        val isPlaying: Boolean = false,
+        val currentPosition: Long = 0L,
+        val duration: Long = 0L,
+        val isShuffleEnabled: Boolean = false,
+        val repeatMode: RepeatMode = RepeatMode.OFF,
+        val volume: Float = 1f,
+        val lyrics: List<LyricLine> = emptyList(),
+        val currentLyricIndex: Int = -1,
+        val isLoadingLyrics: Boolean = false,
+        val isCurrentTrackFavorite: Boolean = false,
+        val playingSource: String = ""
+    )
+    ```
+    
+    **Media3 integration**:
+    - `MediaController` for playback control
+    - `MediaSession` for notification integration
+    - `ExoPlayer` for audio rendering
+  </Accordion>
+  
+  <Accordion title="Rust FFI (UniFFI)" icon="rust">
+    **Location**: `features/rusteer/`
+    
+    - `RustDeezerService.kt` - Kotlin wrapper around Rust library
+    - `rusteer.kt` - Auto-generated UniFFI bindings
+    
+    **UniFFI dependency**:
+    ```kotlin
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
+    ```
+    
+    **Native library location**: `app/src/main/jniLibs/<abi>/librusteer.so`
+    
+    **Supported ABIs**:
+    - `arm64-v8a` (64-bit ARM)
+    - `armeabi-v7a` (32-bit ARM)
+    - `x86_64` (64-bit Intel)
+    - `x86` (32-bit Intel)
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Rusteer Library Structure
+
+The `rusteer/` directory contains a Rust library that handles Deezer downloads and decryption:
+
+```
+rusteer/
+├── Cargo.toml              # Rust dependencies
+├── build.rs                # UniFFI build script
+└── src/
+    ├── lib.rs              # Library entry point
+    ├── rusteer.rs          # Main Rusteer struct
+    ├── bindings.rs         # UniFFI bindings
+    ├── error.rs            # Error types
+    ├── tagging.rs          # ID3/FLAC metadata tagging
+    ├── api/                # API clients
+    │   ├── mod.rs
+    │   ├── public.rs       # DeezerApi (public API)
+    │   └── gateway.rs      # GatewayApi (private API with ARL)
+    ├── crypto/             # Decryption utilities
+    │   └── mod.rs          # Blowfish/AES decryption
+    ├── converters/         # Data converters
+    │   └── mod.rs
+    └── models/             # Rust data models
+        ├── mod.rs
+        ├── track.rs
+        ├── album.rs
+        ├── artist.rs
+        ├── playlist.rs
+        └── common.rs
+```
+
+### Cargo Dependencies
+
+```toml rusteer/Cargo.toml
+[dependencies]
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+openssl = { version = "0.10", features = ["vendored"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+# Cryptography
+md-5 = "0.10"
+sha1 = "0.10"
+blowfish = "0.9"
+aes = "0.8"
+ctr = "0.9"
+hex = "0.4"
+cipher = "0.4"
+byteorder = "1.5"
+
+# Audio tagging
+lofty = "0.22"
+
+# UniFFI
+uniffi = { version = "0.28", features = ["tokio", "cli"] }
+```
+
+### Key Rust Files
+
+<AccordionGroup>
+  <Accordion title="lib.rs" icon="book">
+    Library entry point and public API:
+    
+    ```rust
+    pub mod api;
+    pub mod converters;
+    pub mod crypto;
+    pub mod error;
+    pub mod models;
+    mod rusteer;
+    pub mod tagging;
+    
+    // Main interface (recommended)
+    pub use rusteer::{BatchDownloadResult, DownloadQuality, DownloadResult, Rusteer};
+    
+    // Low-level APIs
+    pub use api::{DeezerApi, GatewayApi};
+    pub use error::DeezerError;
+    pub use models::{Album, Artist, Playlist, Track};
+    
+    pub mod bindings;
+    uniffi::setup_scaffolding!();
+    ```
+  </Accordion>
+  
+  <Accordion title="rusteer.rs" icon="download">
+    Main download orchestration:
+    
+    ```rust
+    pub struct Rusteer {
+        gateway: GatewayApi,
+        api: DeezerApi,
+    }
+    
+    impl Rusteer {
+        pub async fn new(arl: &str) -> Result<Self, DeezerError> {
+            let gateway = GatewayApi::new(arl).await?;
+            let api = DeezerApi::new();
+            Ok(Self { gateway, api })
+        }
+        
+        pub async fn download_track(&self, track_id: &str) -> Result<DownloadResult, DeezerError> {
+            // 1. Fetch track metadata
+            // 2. Get download URL from gateway
+            // 3. Download encrypted chunks
+            // 4. Decrypt using Blowfish
+            // 5. Write ID3 tags
+            // 6. Return file path
+        }
+        
+        pub async fn download_album(&self, album_id: &str) -> Result<BatchDownloadResult, DeezerError> {
+            // Download all tracks in album
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="crypto/mod.rs" icon="lock">
+    Decryption implementation:
+    
+    ```rust
+    use blowfish::Blowfish;
+    use cipher::{BlockDecrypt, KeyInit};
+    use md5::{Digest, Md5};
+    
+    pub fn decrypt_track(data: &[u8], track_id: &str) -> Vec<u8> {
+        // Generate Blowfish key from track ID
+        let key = generate_blowfish_key(track_id);
+        let cipher = Blowfish::new_from_slice(&key).unwrap();
+        
+        // Decrypt chunks (every 3rd 2048-byte chunk is encrypted)
+        let mut decrypted = Vec::new();
+        for (i, chunk) in data.chunks(2048).enumerate() {
+            if i % 3 == 0 && chunk.len() == 2048 {
+                // Decrypt this chunk
+                let mut block = chunk.to_vec();
+                cipher.decrypt_blocks(&mut block);
+                decrypted.extend_from_slice(&block);
+            } else {
+                // Copy unencrypted chunk
+                decrypted.extend_from_slice(chunk);
+            }
+        }
+        decrypted
+    }
+    
+    fn generate_blowfish_key(track_id: &str) -> Vec<u8> {
+        let secret = b"g4el58wc0zvf9na1";
+        let mut hasher = Md5::new();
+        hasher.update(track_id.as_bytes());
+        let hash = hasher.finalize();
+        // XOR hash with secret...
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="tagging.rs" icon="tag">
+    ID3 and FLAC tagging:
+    
+    ```rust
+    use lofty::{Accessor, AudioFile, Probe, TagExt};
+    use lofty::id3::v2::Id3v2Tag;
+    use std::path::Path;
+    
+    pub fn write_tags(
+        file_path: &Path,
+        title: &str,
+        artist: &str,
+        album: &str,
+        track_number: Option<u32>,
+        album_art: Option<&[u8]>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut tagged_file = Probe::open(file_path)?.read()?;
+        let mut tag = Id3v2Tag::new();
+        
+        tag.set_title(title.to_string());
+        tag.set_artist(artist.to_string());
+        tag.set_album(album.to_string());
+        if let Some(num) = track_number {
+            tag.set_track(num);
+        }
+        if let Some(art) = album_art {
+            tag.set_picture(/* album art bytes */);
+        }
+        
+        tagged_file.set_tag(tag.into());
+        tagged_file.save_to_path(file_path)?;
+        Ok(())
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="bindings.rs" icon="link">
+    UniFFI interface definition:
+    
+    ```rust
+    use uniffi;
+    
+    #[uniffi::export]
+    pub struct RusteerService {
+        // Internal state
+    }
+    
+    #[uniffi::export]
+    impl RusteerService {
+        #[uniffi::constructor]
+        pub fn new() -> Self {
+            Self {}
+        }
+        
+        pub fn verify_arl(&self, arl: String) -> bool {
+            // Verify ARL token
+        }
+        
+        pub async fn download_track(
+            &self,
+            arl: String,
+            track_id: String,
+            output_dir: String,
+            quality: DownloadQuality,
+        ) -> Result<DownloadResult, DeezerError> {
+            // Download single track
+        }
+        
+        pub async fn download_album(
+            &self,
+            arl: String,
+            album_id: String,
+            output_dir: String,
+            quality: DownloadQuality,
+        ) -> Result<BatchDownloadResult, DeezerError> {
+            // Download entire album
+        }
+    }
+    
+    #[derive(uniffi::Enum)]
+    pub enum DownloadQuality {
+        Flac,
+        Mp3_320,
+        Mp3_128,
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Resource Organization
+
+### res/ Directory
+
+```
+res/
+├── drawable/               # Vector drawables and images
+│   ├── ic_app_icon.png     # App launcher icon
+│   └── ...                 # Other icons
+├── mipmap-*/               # Launcher icons (various densities)
+│   ├── ic_launcher.png
+│   └── ic_launcher_round.png
+├── values/                 # Default values
+│   ├── strings.xml         # English strings
+│   ├── colors.xml          # Color definitions
+│   ├── themes.xml          # App themes
+│   └── styles.xml          # Custom styles
+├── values-es/              # Spanish translations
+│   └── strings.xml
+└── xml/                    # XML configurations
+    ├── backup_rules.xml
+    └── data_extraction_rules.xml
+```
+
+### String Resources
+
+<CodeGroup>
+```xml values/strings.xml (English)
+<resources>
+    <string name="app_name">Deeztracker</string>
+    <string name="search_hint">Search tracks, albums, artists...</string>
+    <string name="download_quality_title">Audio Quality</string>
+    <string name="quality_flac">FLAC (Lossless)</string>
+    <string name="quality_mp3_320">MP3 320kbps</string>
+    <string name="quality_mp3_128">MP3 128kbps</string>
+    <string name="local_music_title">Local Music</string>
+    <string name="downloads_title">Downloads</string>
+    <string name="settings_title">Settings</string>
+    <!-- ... 100+ strings -->
+</resources>
+```
+
+```xml values-es/strings.xml (Spanish)
+<resources>
+    <string name="app_name">Deeztracker</string>
+    <string name="search_hint">Buscar canciones, álbumes, artistas...</string>
+    <string name="download_quality_title">Calidad de Audio</string>
+    <string name="quality_flac">FLAC (Sin pérdida)</string>
+    <string name="quality_mp3_320">MP3 320kbps</string>
+    <string name="quality_mp3_128">MP3 128kbps</string>
+    <string name="local_music_title">Música Local</string>
+    <string name="downloads_title">Descargas</string>
+    <string name="settings_title">Configuración</string>
+    <!-- ... Spanish translations -->
+</resources>
+```
+</CodeGroup>
+
+---
+
+## Build Outputs
+
+### APK Output Location
+
+After building, APKs are located at:
+
+```
+app/build/outputs/apk/
+├── debug/
+│   └── Deeztracker-1.1.1.apk
+└── release/
+    └── Deeztracker-1.1.1.apk
+```
+
+**Note**: The output filename is customized in `app/build.gradle.kts:68-73`:
+
+```kotlin
+applicationVariants.all {
+    outputs.all {
+        (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+            "Deeztracker-${versionName}.apk"
+    }
+}
+```
+
+### Bundle Output (AAB)
+
+Android App Bundles for Play Store:
+
+```
+app/build/outputs/bundle/release/
+└── app-release.aab
+```
+
+---
+
+## Configuration Files
+
+### Git Configuration
+
+```gitignore .gitignore
+# Built application files
+*.apk
+*.aab
+*.ipa
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+.gradle/
+
+# Gradle files
+.gradle/
+local.properties
+
+# IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Keystore files
+*.jks
+*.keystore
+keystore.properties
+
+# Rust build artifacts
+rusteer/target/
+rusteer/Cargo.lock
+
+# OS files
+.DS_Store
+Thumbs.db
+```
+
+### SDK Manager
+
+```properties .sdkmanrc
+java=11.0.24-tem
+```
+
+Specifies Java version for SDK management (SDKMAN!).
+
+---
+
+## Directory Guidelines
+
+<Steps>
+  <Step title="Feature Modules">
+    New features should be placed in `features/` with their own package:
+    
+    ```
+    features/
+    └── newfeature/
+        ├── NewFeatureRepository.kt
+        ├── NewFeatureModels.kt
+        └── NewFeatureService.kt
+    ```
+  </Step>
+  
+  <Step title="UI Screens">
+    New screens go in `ui/screens/` with paired ViewModels:
+    
+    ```
+    ui/screens/
+    ├── NewScreen.kt
+    └── NewViewModel.kt
+    ```
+  </Step>
+  
+  <Step title="Reusable Components">
+    Composables used in multiple screens go in `ui/components/`:
+    
+    ```
+    ui/components/
+    └── NewComponent.kt
+    ```
+  </Step>
+  
+  <Step title="Navigation">
+    Add new routes to `navigation/AppNavigation.kt`:
+    
+    ```kotlin
+    composable("new_route/{param}") { backStackEntry ->
+        val param = backStackEntry.arguments?.getString("param")
+        NewScreen(param = param, onBackClick = { navController.popBackStack() })
+    }
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/development/architecture">
+    Learn about the MVVM architecture and design patterns
+  </Card>
+  
+  <Card title="Building" icon="hammer" href="/development/building">
+    Build and run the application from source
+  </Card>
+</CardGroup>

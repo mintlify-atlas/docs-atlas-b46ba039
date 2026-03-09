@@ -1,0 +1,169 @@
+---
+title: Introduction
+description: Deeztracker Mobile - A modern Android music downloader and player for offline listening
+---
+
+<img
+  src="/images/app-icon.png"
+  alt="Deeztracker Logo"
+  width="120"
+  style={{ borderRadius: '16px', marginBottom: '24px' }}
+/>
+
+## Welcome to Deeztracker Mobile
+
+Deeztracker Mobile is a feature-rich Android application that allows users to download music from Deezer for offline playback. Built with modern Android development practices using Kotlin and Jetpack Compose, it offers a sleek, intuitive interface with full offline music library management.
+
+<Note>
+  This application is intended for personal use only. Please respect copyright laws and the terms of service of music platforms.
+</Note>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Search & Discovery" icon="magnifying-glass">
+    Find and download tracks, albums, artists, and playlists from Deezer's extensive catalog
+  </Card>
+  <Card title="Multiple Quality Options" icon="sliders">
+    Download in MP3 128kbps, MP3 320kbps, or lossless FLAC format
+  </Card>
+  <Card title="Offline Music Library" icon="folder-music">
+    Browse your downloads by tracks, albums, or artists with fast scrolling
+  </Card>
+  <Card title="Advanced Music Player" icon="play">
+    Full-featured player with synchronized lyrics, shuffle, repeat modes, and volume boost
+  </Card>
+  <Card title="Playlist Management" icon="list">
+    Create custom playlists and import playlists directly from Deezer
+  </Card>
+  <Card title="Smart Downloads" icon="download">
+    Automatic duplicate detection and progress tracking for all downloads
+  </Card>
+</CardGroup>
+
+## Core Capabilities
+
+### Search & Download
+- **Track Search**: Find and download individual songs instantly
+- **Album Search**: Download complete albums with album art and metadata
+- **Artist Search**: Explore artist discographies with top tracks
+- **Playlist Search**: Import and download entire playlists
+- **Duplicate Detection**: Automatically skips already downloaded tracks
+
+### Music Library Management
+- Browse all downloaded tracks with alphabetical fast scrolling
+- View music organized by album or artist
+- Dedicated downloads section for quick access
+- Edit track metadata (title, artist, album)
+- Share and delete tracks
+
+### Music Player Features
+- Beautiful UI with album art and blurred backgrounds
+- **Synchronized Lyrics**: View lyrics that scroll with the music (powered by LrcLib)
+- Shuffle and Repeat modes (Off, Repeat All, Repeat One)
+- Volume boost up to 200% for quiet tracks
+- Add to favorites and custom playlists
+- Hardware volume button integration
+
+### Customization
+- **Audio Quality**: Choose between MP3_128, MP3_320, or FLAC
+- **Download Location**: Save to Music or Downloads folder  
+- **Language Support**: English and Spanish
+- Dark theme with Material 3 design
+
+## Technology Stack
+
+<AccordionGroup>
+  <Accordion title="Frontend & UI">
+    - **Language**: Kotlin
+    - **UI Framework**: Jetpack Compose with Material 3
+    - **Architecture**: MVVM with ViewModels
+    - **Image Loading**: Coil
+    - **Navigation**: Jetpack Navigation Compose
+  </Accordion>
+  
+  <Accordion title="Backend & Storage">
+    - **Local Storage**: SharedPreferences for settings, MediaStore for music files
+    - **Async Operations**: Kotlin Coroutines & Flow
+    - **Metadata Editing**: JAudioTagger
+  </Accordion>
+  
+  <Accordion title="Media & Playback">
+    - **Media Playback**: Media3 (ExoPlayer)
+    - **Lyrics**: LrcLib API with LRC format parser
+    - **Audio Quality**: FLAC, MP3 320kbps, MP3 128kbps support
+  </Accordion>
+  
+  <Accordion title="Download Engine">
+    - **Native Bridge**: UniFFI (Rust-Kotlin bindings)
+    - **Download Engine**: Rusteer (Custom Rust library)
+    - **API Integration**: Retrofit with Deezer public API
+  </Accordion>
+</AccordionGroup>
+
+## System Requirements
+
+<CardGroup cols={2}>
+  <Card title="Android Version">
+    Android 7.0 (API 24) or higher
+  </Card>
+  <Card title="Deezer Account">
+    Valid Deezer ARL token (from a Deezer account)
+  </Card>
+  <Card title="Internet Connection">
+    Required for downloading content and searching
+  </Card>
+  <Card title="Storage">
+    Sufficient space for music files and storage permission
+  </Card>
+</CardGroup>
+
+<Warning>
+  A Deezer Premium account is recommended for high-quality downloads (FLAC and MP3 320kbps). Free accounts may be limited to MP3 128kbps.
+</Warning>
+
+## Architecture Overview
+
+Deeztracker Mobile follows a clean, modular architecture:
+
+```kotlin
+app/
+├── features/
+│   ├── deezer/         # Deezer API integration (Retrofit)
+│   ├── download/       # Download management with queue system
+│   ├── localmusic/     # Local music library (MediaStore)
+│   ├── lyrics/         # Lyrics fetching & LRC parsing
+│   ├── player/         # Media3 playback controller
+│   └── rusteer/        # Rust FFI bindings for downloads
+└── ui/
+    ├── components/     # Reusable Compose components
+    ├── screens/        # App screens (Search, Library, Player)
+    └── theme/          # Material 3 theme
+```
+
+The app uses a **Rust-powered download engine** via UniFFI for efficient, high-performance music downloads with proper decryption and metadata handling.
+
+## Get Started
+
+Ready to get started with Deeztracker Mobile?
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Download and install the APK on your Android device
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Learn how to set up and start downloading music
+  </Card>
+</CardGroup>
+
+## Version Information
+
+- **Current Version**: 1.1.1
+- **Minimum SDK**: 24 (Android 7.0)
+- **Target SDK**: 34 (Android 14)
+- **Kotlin Version**: 1.9+
+- **Compose Version**: 1.5.4
+
+<Note>
+  Deeztracker Mobile is open-source software licensed under the MIT License.
+</Note>

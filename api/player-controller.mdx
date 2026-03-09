@@ -1,0 +1,576 @@
+---
+title: PlayerController
+description: Singleton controller for music playback with Media3 integration
+---
+
+The `PlayerController` manages music playback using AndroidX Media3. It provides a high-level API for controlling playback, managing queue, and tracking player state with Kotlin Flow.
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/player/PlayerController.kt:27`
+
+## Features
+
+- **Media3 Integration**: Built on AndroidX Media3 for modern playback
+- **State Management**: Observable player state via Kotlin StateFlow
+- **Queue Control**: Play tracks with custom playlists/queues
+- **Playback Controls**: Play, pause, next, previous, seek
+- **Shuffle & Repeat**: Full shuffle and repeat mode support
+- **Favorites Integration**: Track and toggle favorite status
+- **Lyrics Support**: Synchronized lyrics display with timing
+- **Volume Control**: Direct volume manipulation
+- **Session Persistence**: Survives navigation and configuration changes
+
+## Initialization
+
+### getInstance()
+
+Get or create the singleton instance.
+
+<ParamField path="context" type="Context" required>
+  Application or activity context (will be converted to applicationContext internally)
+</ParamField>
+
+<ResponseField name="return" type="PlayerController">
+  The singleton PlayerController instance
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val playerController = PlayerController.getInstance(context)
+```
+
+## Properties
+
+### playerState
+
+<ResponseField name="playerState" type="StateFlow<PlayerState>">
+  Observable state flow containing all player state information
+</ResponseField>
+
+**PlayerState Structure:**
+
+```kotlin
+data class PlayerState(
+    val currentTrack: LocalTrack? = null,
+    val isPlaying: Boolean = false,
+    val duration: Long = 0L,             // Total duration in milliseconds
+    val currentPosition: Long = 0L,      // Current position in milliseconds
+    val volume: Float = 1.0f,            // Volume level (0.0 to 1.0)
+    val isShuffleEnabled: Boolean = false,
+    val repeatMode: RepeatMode = RepeatMode.OFF,
+    val playingSource: String = "Local Library",
+    val isCurrentTrackFavorite: Boolean = false,
+    val lyrics: List<LrcLine> = emptyList(),
+    val currentLyricIndex: Int = -1,
+    val isLoadingLyrics: Boolean = false
+)
+
+enum class RepeatMode {
+    OFF,  // No repeat
+    ONE,  // Repeat current track
+    ALL   // Repeat entire queue
+}
+```
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/player/PlayerState.kt:5`
+
+**LocalTrack Structure:**
+
+```kotlin
+data class LocalTrack(
+    val id: Long,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val albumId: Long,
+    val duration: Long,           // in milliseconds
+    val filePath: String,
+    val size: Long,               // in bytes
+    val mimeType: String,
+    val dateAdded: Long,          // timestamp
+    val dateModified: Long,       // timestamp
+    val albumArtUri: String? = null,
+    val track: Int? = null,       // Track number
+    val year: Int? = null
+)
+```
+
+**Subscribe to State:**
+
+```kotlin
+val playerController = PlayerController.getInstance(context)
+
+lifecycleScope.launch {
+    playerController.playerState.collect { state ->
+        state.currentTrack?.let { track ->
+            titleText.text = track.title
+            artistText.text = track.artist
+        }
+        playPauseButton.isSelected = state.isPlaying
+        progressBar.progress = state.currentPosition.toInt()
+        progressBar.max = state.duration.toInt()
+    }
+}
+```
+
+### playlistRepository
+
+<ResponseField name="playlistRepository" type="LocalPlaylistRepository">
+  Repository for managing local playlists and favorites
+</ResponseField>
+
+Direct access to playlist operations (advanced usage).
+
+## Playback Control Methods
+
+### playTrack()
+
+Start playing a track with a given queue/playlist.
+
+<ParamField path="track" type="LocalTrack" required>
+  The track to play
+</ParamField>
+
+<ParamField path="playlist" type="List<LocalTrack>" required>
+  The full playlist/queue (must include the track being played)
+</ParamField>
+
+<ParamField path="source" type="String?" default="Local Music">
+  Source label for display (e.g., "Favorites", "Album: Random Access Memories")
+</ParamField>
+
+**Example:**
+
+```kotlin
+val playerController = PlayerController.getInstance(context)
+val musicRepository = LocalMusicRepository(context.contentResolver)
+
+// Get all tracks
+val allTracks = musicRepository.getAllTracks()
+
+// Play first track with full library as queue
+val firstTrack = allTracks.first()
+playerController.playTrack(
+    track = firstTrack,
+    playlist = allTracks,
+    source = "Local Library"
+)
+```
+
+<Info>
+This method will:
+1. Set the media queue to the provided playlist
+2. Seek to the specified track
+3. Start playback
+4. Fetch lyrics if available
+5. Update favorite status
+</Info>
+
+---
+
+### togglePlayPause()
+
+Toggle between play and pause states.
+
+**Example:**
+
+```kotlin
+playPauseButton.setOnClickListener {
+    playerController.togglePlayPause()
+}
+```
+
+---
+
+### next()
+
+Skip to the next track in the queue.
+
+**Example:**
+
+```kotlin
+nextButton.setOnClickListener {
+    playerController.next()
+}
+```
+
+---
+
+### previous()
+
+Go to the previous track in the queue.
+
+**Example:**
+
+```kotlin
+previousButton.setOnClickListener {
+    playerController.previous()
+}
+```
+
+---
+
+### seekTo()
+
+Seek to a specific position in the current track.
+
+<ParamField path="position" type="Long" required>
+  Position in milliseconds
+</ParamField>
+
+**Example:**
+
+```kotlin
+// Seek to 30 seconds
+playerController.seekTo(30_000L)
+
+// Seek based on SeekBar
+seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+        if (fromUser) {
+            playerController.seekTo(progress.toLong())
+        }
+    }
+    // ... other overrides
+})
+```
+
+---
+
+### stop()
+
+Stop playback, clear queue, and release the player.
+
+**Example:**
+
+```kotlin
+// Stop on logout
+logoutButton.setOnClickListener {
+    playerController.stop()
+    // ... handle logout
+}
+```
+
+<Warning>
+This completely releases the MediaController and resets all state. Use `togglePlayPause()` to pause without destroying the session.
+</Warning>
+
+## Playback Mode Methods
+
+### setShuffle()
+
+Enable or disable shuffle mode.
+
+<ParamField path="enabled" type="Boolean" required>
+  `true` to enable shuffle, `false` to disable
+</ParamField>
+
+**Example:**
+
+```kotlin
+shuffleButton.setOnClickListener {
+    val currentShuffle = playerController.playerState.value.isShuffleEnabled
+    playerController.setShuffle(!currentShuffle)
+}
+```
+
+---
+
+### toggleRepeatMode()
+
+Cycle through repeat modes: OFF → ALL → ONE → OFF.
+
+**Example:**
+
+```kotlin
+repeatButton.setOnClickListener {
+    playerController.toggleRepeatMode()
+}
+
+// Display current mode
+lifecycleScope.launch {
+    playerController.playerState.collect { state ->
+        repeatButton.text = when (state.repeatMode) {
+            RepeatMode.OFF -> "Repeat: Off"
+            RepeatMode.ALL -> "Repeat: All"
+            RepeatMode.ONE -> "Repeat: One"
+        }
+    }
+}
+```
+
+---
+
+### setVolume()
+
+Set playback volume.
+
+<ParamField path="volume" type="Float" required>
+  Volume level from 0.0 (mute) to 1.0 (max)
+</ParamField>
+
+**Example:**
+
+```kotlin
+// Set to 50% volume
+playerController.setVolume(0.5f)
+
+// Volume slider
+volumeSlider.addOnChangeListener { _, value, fromUser ->
+    if (fromUser) {
+        playerController.setVolume(value)
+    }
+}
+```
+
+## Favorites Methods
+
+### toggleFavorite()
+
+Toggle favorite status of the current track.
+
+**Example:**
+
+```kotlin
+favoriteButton.setOnClickListener {
+    playerController.toggleFavorite()
+}
+
+// Update UI based on favorite status
+lifecycleScope.launch {
+    playerController.playerState.collect { state ->
+        favoriteButton.isSelected = state.isCurrentTrackFavorite
+    }
+}
+```
+
+<Info>
+Favorite status is automatically updated when tracks change. The `isCurrentTrackFavorite` field in `PlayerState` reflects the current status.
+</Info>
+
+## Lyrics Integration
+
+Lyrics are automatically fetched and synchronized when a track starts playing.
+
+**Access Lyrics:**
+
+```kotlin
+lifecycleScope.launch {
+    playerController.playerState.collect { state ->
+        if (state.isLoadingLyrics) {
+            lyricsView.showLoading()
+        } else if (state.lyrics.isNotEmpty()) {
+            lyricsView.setLyrics(state.lyrics)
+            lyricsView.highlightLine(state.currentLyricIndex)
+        } else {
+            lyricsView.showNoLyrics()
+        }
+    }
+}
+```
+
+**LrcLine Structure:**
+
+```kotlin
+data class LrcLine(
+    val timestamp: Long,  // Time in milliseconds
+    val text: String      // Lyric text
+)
+```
+
+The `currentLyricIndex` automatically updates based on playback position (updated every 100ms during playback).
+
+## Position Updates
+
+The `currentPosition` in `PlayerState` is automatically updated every 100ms while playing:
+
+```kotlin
+lifecycleScope.launch {
+    playerController.playerState.collect { state ->
+        val progress = if (state.duration > 0) {
+            (state.currentPosition.toFloat() / state.duration * 100).toInt()
+        } else 0
+        
+        progressBar.progress = progress
+        timeText.text = formatTime(state.currentPosition)
+        durationText.text = formatTime(state.duration)
+    }
+}
+
+fun formatTime(ms: Long): String {
+    val seconds = (ms / 1000).toInt()
+    val minutes = seconds / 60
+    val secs = seconds % 60
+    return "%d:%02d".format(minutes, secs)
+}
+```
+
+## Complete Example
+
+Full example of a player UI with PlayerController:
+
+```kotlin
+@Composable
+fun PlayerScreen() {
+    val context = LocalContext.current
+    val playerController = remember { PlayerController.getInstance(context) }
+    val state by playerController.playerState.collectAsState()
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Track Info
+        state.currentTrack?.let { track ->
+            AsyncImage(
+                model = track.albumArtUri,
+                contentDescription = "Album Art",
+                modifier = Modifier
+                    .size(300.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.headlineMedium
+            )
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            
+            Text(
+                text = "Playing from: ${state.playingSource}",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Progress Bar
+        Slider(
+            value = state.currentPosition.toFloat(),
+            onValueChange = { playerController.seekTo(it.toLong()) },
+            valueRange = 0f..state.duration.toFloat()
+        )
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(formatTime(state.currentPosition))
+            Text(formatTime(state.duration))
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Playback Controls
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            IconButton(onClick = { playerController.setShuffle(!state.isShuffleEnabled) }) {
+                Icon(
+                    imageVector = Icons.Default.Shuffle,
+                    contentDescription = "Shuffle",
+                    tint = if (state.isShuffleEnabled) 
+                        MaterialTheme.colorScheme.primary 
+                    else 
+                        MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            IconButton(onClick = { playerController.previous() }) {
+                Icon(Icons.Default.SkipPrevious, "Previous")
+            }
+            
+            IconButton(onClick = { playerController.togglePlayPause() }) {
+                Icon(
+                    if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    "Play/Pause"
+                )
+            }
+            
+            IconButton(onClick = { playerController.next() }) {
+                Icon(Icons.Default.SkipNext, "Next")
+            }
+            
+            IconButton(onClick = { playerController.toggleRepeatMode() }) {
+                Icon(
+                    when (state.repeatMode) {
+                        RepeatMode.OFF -> Icons.Default.Repeat
+                        RepeatMode.ALL -> Icons.Default.Repeat
+                        RepeatMode.ONE -> Icons.Default.RepeatOne
+                    },
+                    "Repeat",
+                    tint = if (state.repeatMode != RepeatMode.OFF) 
+                        MaterialTheme.colorScheme.primary 
+                    else 
+                        MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        
+        // Favorite Button
+        IconButton(onClick = { playerController.toggleFavorite() }) {
+            Icon(
+                if (state.isCurrentTrackFavorite) 
+                    Icons.Default.Favorite 
+                else 
+                    Icons.Default.FavoriteBorder,
+                "Favorite",
+                tint = if (state.isCurrentTrackFavorite) 
+                    Color.Red 
+                else 
+                    MaterialTheme.colorScheme.onSurface
+            )
+        }
+        
+        // Lyrics
+        if (state.isLoadingLyrics) {
+            CircularProgressIndicator()
+        } else if (state.lyrics.isNotEmpty()) {
+            LazyColumn {
+                itemsIndexed(state.lyrics) { index, line ->
+                    Text(
+                        text = line.text,
+                        color = if (index == state.currentLyricIndex) 
+                            MaterialTheme.colorScheme.primary 
+                        else 
+                            MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (index == state.currentLyricIndex) 
+                            FontWeight.Bold 
+                        else 
+                            FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+## Media3 Service Integration
+
+The PlayerController connects to `MusicService`, a foreground service that handles actual playback:
+
+- **Foreground Service**: Keeps playback alive in background
+- **Notification Controls**: Media controls in notification shade
+- **Session Token**: Connects via Media3 SessionToken
+- **Auto-cleanup**: Service is destroyed when no clients remain
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/player/MusicService.kt`
+
+## Thread Safety
+
+<Note>
+All PlayerController methods are safe to call from any thread. State updates are automatically dispatched to the main thread. However, some initialization happens asynchronously - the controller may not be immediately ready after `getInstance()`.
+</Note>
+
+## See Also
+
+- [DownloadManager](/api/download-manager) - Download tracks to play
+- [RusteerService](/api/rusteer-service) - Download service used by DownloadManager

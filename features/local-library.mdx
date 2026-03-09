@@ -1,0 +1,600 @@
+---
+title: Local Music Library
+description: Browse and manage local music files with MediaStore integration, metadata editing, and smart organization
+icon: folder-music
+---
+
+## Overview
+
+Deeztracker Mobile provides comprehensive access to your device's local music library through Android's MediaStore API. The app can browse tracks, albums, and artists, with support for metadata editing and efficient querying.
+
+## LocalMusicRepository
+
+The `LocalMusicRepository` handles all interactions with Android's MediaStore:
+
+```kotlin
+class LocalMusicRepository(
+    private val contentResolver: ContentResolver,
+    private val playlistRepository: LocalPlaylistRepository? = null
+) {
+    // Repository implementation
+}
+```
+
+<Info>
+The repository uses `ContentResolver` to query MediaStore, ensuring compatibility with Android's media system.
+</Info>
+
+## MediaStore Integration
+
+### Querying Tracks
+
+The repository queries all music files from external storage:
+
+```kotlin
+suspend fun getAllTracks(): List<LocalTrack> = withContext(Dispatchers.IO) {
+    val tracks = mutableListOf<LocalTrack>()
+    
+    val projection = arrayOf(
+        MediaStore.Audio.Media._ID,
+        MediaStore.Audio.Media.TITLE,
+        MediaStore.Audio.Media.ARTIST,
+        MediaStore.Audio.Media.ALBUM,
+        MediaStore.Audio.Media.ALBUM_ID,
+        MediaStore.Audio.Media.DURATION,
+        MediaStore.Audio.Media.DATA,           // File path
+        MediaStore.Audio.Media.SIZE,
+        MediaStore.Audio.Media.MIME_TYPE,
+        MediaStore.Audio.Media.DATE_ADDED,
+        MediaStore.Audio.Media.DATE_MODIFIED,
+        MediaStore.Audio.Media.TRACK,          // Track number
+        MediaStore.Audio.Media.YEAR
+    )
+    
+    // Filter: only music files (not notifications, ringtones, etc.)
+    val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+    val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+    
+    contentResolver.query(
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+        projection,
+        selection,
+        null,
+        sortOrder
+    )?.use { cursor ->
+        // Process results
+    }
+    
+    tracks
+}
+```
+
+### LocalTrack Model
+
+```kotlin
+data class LocalTrack(
+    val id: Long,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val albumId: Long,
+    val duration: Long,           // milliseconds
+    val filePath: String,
+    val size: Long,               // bytes
+    val mimeType: String,
+    val dateAdded: Long,          // Unix timestamp
+    val dateModified: Long,
+    val albumArtUri: String?,
+    val track: Int,               // Track number (e.g., 1001 = disc 1, track 1)
+    val year: Int
+)
+```
+
+<Note>
+The `track` field uses a format where `disc * 1000 + trackNumber` (e.g., 1001 = disc 1, track 1).
+</Note>
+
+## Album Art Handling
+
+Album artwork is retrieved using the album ID:
+
+```kotlin
+private fun getAlbumArtUri(albumId: Long): String? {
+    return try {
+        val artworkUri = Uri.parse("content://media/external/audio/albumart")
+        ContentUris.withAppendedId(artworkUri, albumId).toString()
+    } catch (e: Exception) {
+        null
+    }
+}
+```
+
+This provides URIs like:
+```
+content://media/external/audio/albumart/1234
+```
+
+### Using Album Art in UI
+
+```kotlin
+@Composable
+fun TrackArtwork(model: String?, modifier: Modifier = Modifier) {
+    AsyncImage(
+        model = model,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = modifier,
+        error = painterResource(R.drawable.ic_app_icon)  // Fallback
+    )
+}
+```
+
+## Browsing by Albums
+
+### Get All Albums
+
+```kotlin
+suspend fun getAllAlbums(): List<LocalAlbum> = withContext(Dispatchers.IO) {
+    val albums = mutableListOf<LocalAlbum>()
+    
+    val projection = arrayOf(
+        MediaStore.Audio.Albums._ID,
+        MediaStore.Audio.Albums.ALBUM,
+        MediaStore.Audio.Albums.ARTIST,
+        MediaStore.Audio.Albums.NUMBER_OF_SONGS
+    )
+    
+    val sortOrder = "${MediaStore.Audio.Albums.ALBUM} COLLATE NOCASE ASC"
+    
+    contentResolver.query(
+        MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
+        projection,
+        null,
+        null,
+        sortOrder
+    )?.use { cursor ->
+        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums._ID)
+        val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ALBUM)
+        val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.ARTIST)
+        val numberOfSongsColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Albums.NUMBER_OF_SONGS)
+        
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(idColumn)
+            albums.add(
+                LocalAlbum(
+                    id = id,
+                    title = cursor.getString(albumColumn) ?: "Unknown Album",
+                    artist = cursor.getString(artistColumn) ?: "Unknown Artist",
+                    trackCount = cursor.getInt(numberOfSongsColumn),
+                    albumArtUri = getAlbumArtUri(id)
+                )
+            )
+        }
+    }
+    
+    albums
+}
+```
+
+### LocalAlbum Model
+
+```kotlin
+data class LocalAlbum(
+    val id: Long,
+    val title: String,
+    val artist: String,
+    val trackCount: Int,
+    val albumArtUri: String?
+)
+```
+
+### Get Album Tracks
+
+```kotlin
+suspend fun getTracksForAlbum(albumId: Long): List<LocalTrack> = withContext(Dispatchers.IO) {
+    val tracks = getAllTracks()
+    tracks
+        .filter { it.albumId == albumId }
+        .sortedWith(compareBy(
+            { track -> val n = track.track ?: 0; if (n > 0) n / 1000 else Int.MAX_VALUE },  // Disc number
+            { track -> val n = track.track ?: 0; if (n > 0) n % 1000 else Int.MAX_VALUE }   // Track number
+        ))
+}
+```
+
+<Tip>
+Tracks are sorted by disc number first, then track number, ensuring proper album ordering.
+</Tip>
+
+## Browsing by Artists
+
+### Get All Artists
+
+```kotlin
+suspend fun getAllArtists(): List<LocalArtist> = withContext(Dispatchers.IO) {
+    val artists = mutableListOf<LocalArtist>()
+    
+    val projection = arrayOf(
+        MediaStore.Audio.Artists._ID,
+        MediaStore.Audio.Artists.ARTIST,
+        MediaStore.Audio.Artists.NUMBER_OF_TRACKS,
+        MediaStore.Audio.Artists.NUMBER_OF_ALBUMS
+    )
+    
+    val sortOrder = "${MediaStore.Audio.Artists.ARTIST} ASC"
+    
+    contentResolver.query(
+        MediaStore.Audio.Artists.EXTERNAL_CONTENT_URI,
+        projection,
+        null,
+        null,
+        sortOrder
+    )?.use { cursor ->
+        // Process cursor
+    }
+    
+    artists
+}
+```
+
+### LocalArtist Model
+
+```kotlin
+data class LocalArtist(
+    val id: Long,
+    val name: String,
+    val numberOfTracks: Int,
+    val numberOfAlbums: Int
+)
+```
+
+### Get Artist Tracks
+
+```kotlin
+suspend fun getTracksForArtist(artistName: String): List<LocalTrack> = withContext(Dispatchers.IO) {
+    val tracks = getAllTracks()
+    tracks.filter { it.artist == artistName }
+}
+```
+
+## Search Functionality
+
+Search across title, artist, and album fields:
+
+```kotlin
+suspend fun searchTracks(query: String): List<LocalTrack> = withContext(Dispatchers.IO) {
+    val tracks = getAllTracks()
+    tracks.filter {
+        it.title.contains(query, ignoreCase = true) ||
+        it.artist.contains(query, ignoreCase = true) ||
+        it.album.contains(query, ignoreCase = true)
+    }
+}
+```
+
+<Info>
+Search uses in-memory filtering for simplicity, as getAllTracks() is already optimized.
+</Info>
+
+## Track Deletion
+
+Deeztracker supports track deletion with proper Android permissions:
+
+### Request Delete
+
+```kotlin
+suspend fun requestDeleteTrack(trackId: Long): IntentSender? = withContext(Dispatchers.IO) {
+    val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, trackId)
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        // Android 11+ (API 30+)
+        val pendingIntent = MediaStore.createDeleteRequest(contentResolver, listOf(uri))
+        return@withContext pendingIntent.intentSender
+    } else {
+        // Android 10 and below
+        try {
+            val deleteResult = contentResolver.delete(uri, null, null)
+            if (deleteResult > 0) {
+                playlistRepository?.removeTrackFromAllPlaylists(trackId)
+            }
+            return@withContext null
+        } catch (securityException: RecoverableSecurityException) {
+            return@withContext securityException.userAction.actionIntent.intentSender
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext null
+        }
+    }
+}
+```
+
+### Handle Delete Result
+
+```kotlin
+suspend fun onTrackDeleted(trackId: Long) = withContext(Dispatchers.IO) {
+    playlistRepository?.removeTrackFromAllPlaylists(trackId)
+}
+```
+
+### UI Implementation
+
+```kotlin
+val deleteLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.StartIntentSenderForResult()
+) { result ->
+    if (result.resultCode == Activity.RESULT_OK) {
+        scope.launch {
+            musicRepository.onTrackDeleted(trackId)
+            // Refresh UI
+        }
+    }
+}
+
+// Request deletion
+scope.launch {
+    val intentSender = musicRepository.requestDeleteTrack(trackId)
+    if (intentSender != null) {
+        deleteLauncher.launch(
+            IntentSenderRequest.Builder(intentSender).build()
+        )
+    } else {
+        // Deleted successfully or failed
+    }
+}
+```
+
+<Warning>
+On Android 11+, deletion requires user confirmation via system dialog.
+</Warning>
+
+## Downloaded Tracks Filter
+
+Filter tracks from specific download directories:
+
+```kotlin
+suspend fun getDownloadedTracks(downloadPaths: List<String>): List<LocalTrack> = withContext(Dispatchers.IO) {
+    val allTracks = getAllTracks()
+    allTracks.filter { track ->
+        downloadPaths.any { path -> track.filePath.startsWith(path) }
+    }
+}
+
+// Usage
+val downloadDir = "/storage/emulated/0/Music/Deeztracker/"
+val downloadedTracks = repository.getDownloadedTracks(listOf(downloadDir))
+```
+
+## Track by Path Lookup
+
+Retrieve MediaStore ID by file path:
+
+```kotlin
+suspend fun getTrackIdByPath(path: String): Long? = withContext(Dispatchers.IO) {
+    val projection = arrayOf(MediaStore.Audio.Media._ID)
+    val selection = "${MediaStore.Audio.Media.DATA} = ?"
+    val selectionArgs = arrayOf(path)
+    
+    contentResolver.query(
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+        projection,
+        selection,
+        selectionArgs,
+        null
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            return@withContext cursor.getLong(idColumn)
+        }
+    }
+    return@withContext null
+}
+```
+
+<Note>
+This function is used after downloads to link files with MediaStore entries.
+</Note>
+
+## Storage Information
+
+### Total Storage Space
+
+```kotlin
+suspend fun getTotalStorageSpace(): Long = withContext(Dispatchers.IO) {
+    val path = Environment.getExternalStorageDirectory()
+    val stat = StatFs(path.path)
+    val blockSize = stat.blockSizeLong
+    val totalBlocks = stat.blockCountLong
+    totalBlocks * blockSize
+}
+```
+
+## Metadata Management
+
+While metadata editing is handled by `MetadataEditor`, the repository provides read access to all metadata fields:
+
+### Available Metadata
+
+- **Title** - Track name
+- **Artist** - Primary artist
+- **Album** - Album name
+- **Album Artist** - Album artist (if different from track artist)
+- **Track Number** - Position in album
+- **Disc Number** - Disc number for multi-disc albums
+- **Year** - Release year
+- **Genre** - Music genre
+- **Duration** - Length in milliseconds
+- **Bitrate** - Audio quality
+- **MIME Type** - File format (e.g., audio/mpeg)
+
+## UI Components
+
+### Track List
+
+```kotlin
+@Composable
+fun TrackList(
+    tracks: List<LocalTrack>,
+    onTrackClick: (LocalTrack) -> Unit
+) {
+    LazyColumn {
+        items(tracks) { track ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onTrackClick(track) }
+                    .padding(12.dp)
+            ) {
+                TrackArtwork(
+                    model = track.albumArtUri,
+                    modifier = Modifier.size(64.dp)
+                )
+                
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = track.title,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = track.artist,
+                        color = TextGray
+                    )
+                    Text(
+                        text = formatDuration(track.duration),
+                        color = TextGray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+### Album Grid
+
+```kotlin
+@Composable
+fun AlbumGrid(
+    albums: List<LocalAlbum>,
+    onAlbumClick: (LocalAlbum) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        items(albums) { album ->
+            Column(
+                modifier = Modifier.clickable { onAlbumClick(album) },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TrackArtwork(
+                    model = album.albumArtUri,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = album.title,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = album.artist,
+                    color = TextGray,
+                    fontSize = 12.sp,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+```
+
+### Artist List
+
+```kotlin
+@Composable
+fun ArtistList(
+    artists: List<LocalArtist>,
+    onArtistClick: (LocalArtist) -> Unit
+) {
+    LazyColumn {
+        items(artists) { artist ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onArtistClick(artist) }
+                    .padding(16.dp)
+            ) {
+                // Artist initial in circle
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Primary.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = artist.name.firstOrNull()?.toString() ?: "?",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Primary
+                    )
+                }
+                
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                Column {
+                    Text(
+                        text = artist.name,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "${artist.numberOfTracks} tracks • ${artist.numberOfAlbums} albums",
+                        color = TextGray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+## Best Practices
+
+### Performance
+
+1. **Cursor management** - Always use `.use { }` to close cursors
+2. **Background threads** - All queries run on `Dispatchers.IO`
+3. **Efficient sorting** - Use SQL `ORDER BY` instead of Kotlin sorting
+4. **Cached queries** - Consider caching `getAllTracks()` results
+
+### Reliability
+
+1. **Null safety** - Handle missing metadata gracefully
+2. **Permission checks** - Verify READ_EXTERNAL_STORAGE permission
+3. **Error handling** - Catch and log exceptions
+4. **Playlist cleanup** - Remove deleted tracks from playlists
+
+### User Experience
+
+1. **Smart filtering** - Exclude ringtones and notifications
+2. **Natural sorting** - Case-insensitive alphabetical order
+3. **Album art fallback** - Show app icon when artwork missing
+4. **Track numbering** - Proper disc and track ordering
+
+<Warning>
+Always check for storage permissions before querying MediaStore.
+</Warning>

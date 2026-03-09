@@ -1,0 +1,463 @@
+---
+title: "Dialog Components"
+description: "Playlist and track management dialog components"
+---
+
+## Overview
+
+Dialog components provide user interfaces for creating/editing playlists, editing track metadata, viewing track details, and managing playlist membership.
+
+## CreatePlaylistDialog
+
+Dialog for creating a new playlist with a user-provided name.
+
+**Location:** `ui/components/CreatePlaylistDialog.kt:14`
+
+### Parameters
+
+<ParamField path="onDismiss" type="() -> Unit" required>
+  Callback invoked when dialog is dismissed without creating
+</ParamField>
+
+<ParamField path="onCreate" type="(String) -> Unit" required>
+  Callback invoked with playlist name when user confirms creation
+</ParamField>
+
+### Features
+
+- **Single text field**: Name input with validation
+- **Auto-focus**: TextField ready for immediate typing
+- **Empty validation**: Create button only works with non-blank names
+- **Dark theme**: Matches app BackgroundDark theme
+
+### UI Elements
+
+- **Title**: "New Playlist" (localized via `R.string.new_playlist_title`)
+- **Input field**: Outlined text field with label "Playlist Name"
+- **Confirm button**: "Create" (primary color, only enabled if name is non-blank)
+- **Dismiss button**: "Cancel" (gray text)
+
+### Usage Example
+
+```kotlin
+var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+
+if (showCreatePlaylistDialog) {
+    CreatePlaylistDialog(
+        onDismiss = { showCreatePlaylistDialog = false },
+        onCreate = { name ->
+            playlistRepository.createPlaylist(name)
+            showCreatePlaylistDialog = false
+        }
+    )
+}
+```
+
+### State Management
+
+Internal state:
+
+```kotlin
+var newPlaylistName by remember { mutableStateOf("") }
+```
+
+The dialog maintains its own text field state until creation or dismissal.
+
+---
+
+## EditPlaylistDialog
+
+Dialog for renaming an existing playlist.
+
+**Location:** `ui/components/EditPlaylistDialog.kt:14`
+
+### Parameters
+
+<ParamField path="currentName" type="String" required>
+  Current playlist name (pre-populated in text field)
+</ParamField>
+
+<ParamField path="onDismiss" type="() -> Unit" required>
+  Callback invoked when dialog is dismissed without saving
+</ParamField>
+
+<ParamField path="onEdit" type="(String) -> Unit" required>
+  Callback invoked with new playlist name when user confirms edit
+</ParamField>
+
+### Features
+
+- **Pre-filled input**: Text field initialized with current name
+- **Change detection**: Save button only works if name changed and non-blank
+- **Same validation**: Prevents saving unchanged or empty names
+
+### UI Elements
+
+- **Title**: "Edit Playlist" (localized via `R.string.edit_playlist_title`)
+- **Input field**: Outlined text field with current name as initial value
+- **Confirm button**: "Save" (only enabled if name is different and non-blank)
+- **Dismiss button**: "Cancel"
+
+### Usage Example
+
+```kotlin
+var playlistToEdit by remember { mutableStateOf<LocalPlaylist?>(null) }
+
+playlistToEdit?.let { playlist ->
+    EditPlaylistDialog(
+        currentName = playlist.name,
+        onDismiss = { playlistToEdit = null },
+        onEdit = { newName ->
+            playlistRepository.renamePlaylist(playlist.id, newName)
+            playlistToEdit = null
+        }
+    )
+}
+```
+
+### Validation Logic
+
+```kotlin
+onClick = {
+    if (playlistName.isNotBlank() && playlistName != currentName) {
+        onEdit(playlistName)
+    }
+}
+```
+
+---
+
+## EditTrackDialog
+
+Dialog for editing audio file metadata (title, artist, album, year).
+
+**Location:** `ui/components/EditTrackDialog.kt:19`
+
+### Parameters
+
+<ParamField path="initialMetadata" type="TrackMetadata" required>
+  Current metadata values to pre-populate fields
+</ParamField>
+
+<ParamField path="onDismiss" type="() -> Unit" required>
+  Callback invoked when dialog is dismissed without saving
+</ParamField>
+
+<ParamField path="onSave" type="(TrackMetadata) -> Unit" required>
+  Callback invoked with updated metadata when user confirms changes
+</ParamField>
+
+### Features
+
+- **Four text fields**: Title, Artist, Album, Year
+- **Pre-filled values**: All fields initialized with current metadata
+- **No validation**: Allows saving empty values (user discretion)
+- **Immediate save**: Dialog closes and background save begins
+
+### TrackMetadata Data Class
+
+```kotlin
+data class TrackMetadata(
+    val title: String,
+    val artist: String,
+    val album: String,
+    val year: String
+)
+```
+
+### UI Elements
+
+- **Title**: "Edit Track" (localized)
+- **Four text fields** (all outlined, dark theme):
+  - Title (label: "Title")
+  - Artist (label: "Artist")
+  - Album (label: "Album")
+  - Year (label: "Year")
+- **Confirm button**: "Save" (primary color)
+- **Dismiss button**: "Cancel"
+
+### Usage Example
+
+```kotlin
+var trackToEdit by remember { mutableStateOf<LocalTrack?>(null) }
+var metadataToEdit by remember { mutableStateOf<TrackMetadata?>(null) }
+val metadataEditor = remember { MetadataEditor(context) }
+
+// Load metadata asynchronously
+if (trackToEdit != null && metadataToEdit == null) {
+    LaunchedEffect(trackToEdit) {
+        withContext(Dispatchers.IO) {
+            metadataToEdit = metadataEditor.readMetadata(trackToEdit!!.filePath)
+        }
+    }
+}
+
+// Show dialog when metadata is loaded
+if (trackToEdit != null && metadataToEdit != null) {
+    EditTrackDialog(
+        initialMetadata = metadataToEdit!!,
+        onDismiss = { 
+            trackToEdit = null
+            metadataToEdit = null
+        },
+        onSave = { newMetadata ->
+            val trackPath = trackToEdit!!.filePath
+            trackToEdit = null
+            metadataToEdit = null
+            
+            scope.launch(Dispatchers.IO) {
+                metadataEditor.writeMetadata(
+                    trackPath, 
+                    newMetadata,
+                    onScanComplete = { viewModel.loadMusic() }
+                )
+            }
+        }
+    )
+}
+```
+
+### Text Field Styling
+
+Internal `EditTextField` composable:
+
+```kotlin
+OutlinedTextField(
+    value = value,
+    onValueChange = onValueChange,
+    label = { Text(label, color = TextGray) },
+    singleLine = true,
+    colors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = SurfaceDark,
+        unfocusedContainerColor = SurfaceDark,
+        focusedBorderColor = Primary,
+        unfocusedBorderColor = Color.Transparent,
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        cursorColor = Primary
+    )
+)
+```
+
+---
+
+## TrackDetailsDialog
+
+Read-only dialog displaying detailed track file information.
+
+**Location:** `ui/components/TrackDetailsDialog.kt:22`
+
+### Parameters
+
+<ParamField path="track" type="LocalTrack" required>
+  Track object containing file metadata
+</ParamField>
+
+<ParamField path="onDismiss" type="() -> Unit" required>
+  Callback invoked when dialog is closed
+</ParamField>
+
+### Features
+
+- **Read-only**: No editing, information display only
+- **File details**: Path, size, format, bitrate
+- **No actions**: Single "Close" button
+
+### Displayed Information
+
+| Label | Value |
+|-------|-------|
+| Path | `track.filePath` |
+| Size | `track.getFormattedSize()` (e.g., "3.2 MB") |
+| Format | `track.mimeType` (e.g., "audio/flac") |
+| Bitrate | "Unknown" (not currently available) |
+
+### UI Elements
+
+- **Title**: "Details"
+- **Detail rows**: Label (primary color, bold 12sp) + value (white, 14sp)
+- **Close button**: "Close" in primary color
+
+### Usage Example
+
+```kotlin
+var showDetails by remember { mutableStateOf(false) }
+
+DropdownMenuItem(
+    text = { Text("Details") },
+    onClick = { showDetails = true }
+)
+
+if (showDetails) {
+    TrackDetailsDialog(
+        track = currentTrack,
+        onDismiss = { showDetails = false }
+    )
+}
+```
+
+### DetailRow Component
+
+Internal composable for rendering label-value pairs:
+
+```kotlin
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Text(text = label, color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(text = value, color = Color.White, fontSize = 14.sp)
+    }
+}
+```
+
+---
+
+## AddToPlaylistBottomSheet
+
+Bottom sheet for selecting a playlist to add a track to, with quick playlist creation.
+
+**Location:** `ui/components/AddToPlaylistBottomSheet.kt:36`
+
+### Parameters
+
+<ParamField path="playlists" type="List<LocalPlaylist>" required>
+  List of available playlists to display
+</ParamField>
+
+<ParamField path="onDismiss" type="() -> Unit" required>
+  Callback invoked when bottom sheet is dismissed
+</ParamField>
+
+<ParamField path="onPlaylistClick" type="(LocalPlaylist) -> Unit" required>
+  Callback invoked when user selects a playlist. Shows toast confirmation.
+</ParamField>
+
+<ParamField path="onCreateNewPlaylist" type="() -> Unit" required>
+  Callback to open create playlist dialog
+</ParamField>
+
+### Features
+
+- **Bottom sheet UI**: Modal sheet with drag handle
+- **Favorites highlight**: "Favorites" playlist shown first with heart icon
+- **Create button**: Quick access to create new playlist
+- **Toast feedback**: Shows "Added to [playlist name]" confirmation
+- **Scrollable list**: LazyColumn for many playlists
+
+### UI Elements
+
+1. **Header**: "Add to Playlist" title (18sp, bold, centered)
+2. **Create button**: Full-width button with plus icon and "New Playlist" text
+3. **Favorites item**: Blue gradient background with heart icon
+4. **Regular playlist items**: Gray gradient with music note icon
+5. **Track count**: "X songs" subtitle for each playlist
+
+### Layout Structure
+
+```
+┌─────────────────────────────┐
+│  Add to Playlist           │  ← Header
+├─────────────────────────────┤
+│  [+] New Playlist          │  ← Create button
+├─────────────────────────────┤
+│  [♥] Favorites             │  ← Special item
+│      X songs               │
+├─────────────────────────────┤
+│  [♪] My Playlist 1         │  ← Regular items
+│      Y songs               │
+└─────────────────────────────┘
+```
+
+### Usage Example
+
+```kotlin
+var showAddToPlaylist by remember { mutableStateOf(false) }
+var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+val playlists by playlistRepository.playlists.collectAsState()
+
+if (showAddToPlaylist) {
+    AddToPlaylistBottomSheet(
+        playlists = playlists,
+        onDismiss = { showAddToPlaylist = false },
+        onPlaylistClick = { playlist ->
+            scope.launch {
+                playlistRepository.addTrackToPlaylist(playlist.id, track.id)
+            }
+            showAddToPlaylist = false
+        },
+        onCreateNewPlaylist = { showCreatePlaylistDialog = true }
+    )
+}
+
+if (showCreatePlaylistDialog) {
+    CreatePlaylistDialog(
+        onDismiss = { showCreatePlaylistDialog = false },
+        onCreate = { name ->
+            playlistRepository.createPlaylist(name)
+            showCreatePlaylistDialog = false
+        }
+    )
+}
+```
+
+### PlaylistItem Component
+
+Internal composable rendering individual playlist rows:
+
+**Parameters:**
+- `playlist: LocalPlaylist` - Playlist data
+- `onClick: () -> Unit` - Click handler
+- `isFavorite: Boolean` - Whether this is the favorites playlist
+
+**Styling:**
+- Background: `Color.White.copy(alpha = 0.05f)` with 16dp corner radius
+- Padding: 16dp all sides
+- Icon box: 56x56dp with gradient background
+- Favorites: Blue gradient (`#2196F3` to `#64B5F6`)
+- Regular: Gray gradient (`#B0BEC5` to `#ECEFF1`)
+
+### Toast Messages
+
+Uses localized string resource:
+
+```kotlin
+Toast.makeText(
+    context,
+    context.getString(R.string.toast_added_to_playlist, playlist.name),
+    Toast.LENGTH_SHORT
+).show()
+```
+
+---
+
+## Common Dialog Styling
+
+All dialogs share consistent styling:
+
+### Colors
+
+- **Container**: `BackgroundDark` (`Color(0xFF121212)`)
+- **Title**: `Color.White`
+- **Text**: `Color.White` or `TextGray`
+- **Primary button**: `Primary` theme color
+- **Cancel button**: `TextGray`
+
+### Text Fields
+
+- **Focused border**: `Primary` color
+- **Unfocused border**: `TextGray` or transparent
+- **Container**: `SurfaceDark`
+- **Text color**: `Color.White`
+- **Cursor**: `Primary` color
+
+### Buttons
+
+- **Confirm**: `Button` with `Primary` container color
+- **Dismiss**: `TextButton` with `TextGray` text
+
+---
+
+## Related Components
+
+- [Music Player](/api/components/music-player) - Uses AddToPlaylistBottomSheet
+- [Track List](/api/components/track-list) - Uses EditTrackDialog and TrackDetailsDialog

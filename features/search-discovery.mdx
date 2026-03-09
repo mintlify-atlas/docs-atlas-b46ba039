@@ -1,0 +1,324 @@
+---
+title: Search & Discovery
+description: Search for tracks, albums, artists, and playlists on Deezer with real-time preview playback
+icon: magnifying-glass
+---
+
+## Overview
+
+Deeztracker Mobile provides comprehensive search functionality powered by the Deezer API, allowing you to discover millions of tracks, albums, artists, and playlists. The search interface includes real-time preview playback and intelligent pagination for seamless browsing.
+
+## Search Interface
+
+The search screen (`SearchScreen.kt`) provides a unified interface with tabbed navigation:
+
+### Search Categories
+
+- **Tracks** - Individual songs with preview playback
+- **Artists** - Browse artist profiles and discographies
+- **Albums** - Complete album collections
+- **Playlists** - Curated Deezer playlists
+
+### UI Components
+
+```kotlin
+val tabs = listOf(
+    stringResource(R.string.tab_tracks),
+    stringResource(R.string.tab_artists),
+    stringResource(R.string.tab_albums),
+    stringResource(R.string.tab_playlists)
+)
+```
+
+The search bar includes:
+- Real-time input with clear button
+- Search action on keyboard (ImeAction.Search)
+- Automatic state restoration when navigating back
+
+## Deezer API Integration
+
+Search queries are handled by `DeezerApiService` using Retrofit:
+
+### API Endpoints
+
+```kotlin
+@GET("search/track")
+suspend fun searchTracks(
+    @Query("q") query: String,
+    @Query("index") index: Int? = null,
+    @Query("limit") limit: Int? = null
+): TrackSearchResponse
+
+@GET("search/album")
+suspend fun searchAlbums(...): AlbumSearchResponse
+
+@GET("search/artist")
+suspend fun searchArtists(...): ArtistSearchResponse
+
+@GET("search/playlist")
+suspend fun searchPlaylists(...): PlaylistSearchResponse
+```
+
+### Search Execution
+
+The search is executed through `DeezerRepository` with pagination support:
+
+```kotlin
+fun performSearch(isNewSearch: Boolean = true) {
+    scope.launch {
+        when (selectedTabIndex) {
+            0 -> {
+                val response = repository.searchTracks(query, currentNext)
+                tracks = if (isNewSearch) response.data else tracks + response.data
+                nextUrl = response.next
+            }
+            // ... other tabs
+        }
+    }
+}
+```
+
+<Note>
+Searches are automatically restored when returning to the screen, maintaining your position and results.
+</Note>
+
+## Infinite Scrolling
+
+Deeztracker implements intelligent infinite scrolling that loads more results as you approach the bottom:
+
+```kotlin
+val shouldLoadMore = remember {
+    derivedStateOf {
+        val layoutInfo = listState.layoutInfo
+        val totalItemsNumber = layoutInfo.totalItemsCount
+        val lastVisibleItemIndex = (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1
+        
+        lastVisibleItemIndex > (totalItemsNumber - 5)
+    }
+}
+```
+
+When you scroll near the bottom (within 5 items), the app automatically fetches the next page using the `nextUrl` from the API response.
+
+## Preview Playback
+
+Tracks can be previewed before downloading using the `PreviewPlayer` singleton:
+
+### Preview Player Architecture
+
+```kotlin
+object PreviewPlayer {
+    private var player: ExoPlayer? = null
+    private val _playingUrl = MutableStateFlow<String?>(null)
+    val playingUrl: StateFlow<String?> = _playingUrl
+    
+    fun toggle(url: String) {
+        // Starts playback if stopped, stops if already playing
+    }
+}
+```
+
+### Features
+
+- **30-second previews** from Deezer's preview URLs
+- **Independent player** - separate from the main music player
+- **Auto-stop** when app is minimized or screen changes
+- **Visual feedback** with waveform animation
+- **Position tracking** updated every 100ms
+
+<Tip>
+Preview playback automatically stops when you navigate away from the search screen or when the app goes to the background.
+</Tip>
+
+## Track Item UI
+
+Each track result displays:
+
+```kotlin
+@Composable
+fun TrackItem(
+    track: Track,
+    isDownloaded: Boolean = false,
+    isDownloading: Boolean = false,
+    onDownloadClick: () -> Unit = {}
+) {
+    Row {
+        // Album artwork (64dp)
+        AsyncImage(model = track.album?.coverMedium)
+        
+        // Track info
+        Column {
+            MarqueeText(text = track.title)  // Scrolling for long titles
+            Text(text = track.artist?.name)
+            Text(text = formatDuration(track.duration))
+        }
+        
+        // Preview button
+        TrackPreviewButton(previewUrl = track.preview)
+        
+        // Download button with state
+        IconButton(onClick = onDownloadClick) {
+            when {
+                isDownloaded -> Icon(Icons.Default.Check)
+                isDownloading -> CircularProgressIndicator()
+                else -> Icon(Icons.Default.Download)
+            }
+        }
+    }
+}
+```
+
+## Download Status Integration
+
+The search screen integrates with `DownloadManager` to show real-time download status:
+
+```kotlin
+val downloadManager = remember { DownloadManager.getInstance(context) }
+val downloadState by downloadManager.downloadState.collectAsState()
+val downloadRefreshTrigger by downloadManager.downloadRefreshTrigger.collectAsState()
+
+LaunchedEffect(track.id, downloadRefreshTrigger) {
+    isDownloaded = downloadManager.isTrackDownloaded(
+        track.title,
+        track.artist?.name ?: ""
+    )
+}
+```
+
+<Info>
+The `downloadRefreshTrigger` automatically updates when downloads complete, ensuring UI stays in sync.
+</Info>
+
+## Search Result Items
+
+### Artist Item
+
+- Circular profile picture (64dp)
+- Artist name with marquee support
+- Fan count display
+- Click to view artist details
+
+### Album Item
+
+- Album cover artwork
+- Album title and artist name
+- Click to view track listing
+
+### Playlist Item
+
+- Playlist cover image
+- Playlist title with marquee
+- Track count display
+- Click to view playlist contents
+
+## Loading States
+
+### Initial Loading
+
+```kotlin
+if (isLoading) {
+    Box(contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(color = Primary)
+    }
+}
+```
+
+### Appending Results
+
+```kotlin
+if (isAppending) {
+    item {
+        Box(contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(
+                color = Primary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+```
+
+### No Results
+
+```kotlin
+@Composable
+fun NoResultsView(query: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Default.Info, tint = Primary, modifier = Modifier.size(80.dp))
+        Text(stringResource(R.string.no_results))
+        Text(stringResource(R.string.search_no_results_desc, query))
+    }
+}
+```
+
+## Lifecycle Management
+
+### Preview Auto-Stop
+
+The preview player automatically stops in several scenarios:
+
+```kotlin
+// When switching tabs
+LaunchedEffect(selectedTabIndex) {
+    PreviewPlayer.stop()
+    if (query.isNotEmpty() && hasSearched) {
+        performSearch(isNewSearch = true)
+    }
+}
+
+// When app goes to background
+val lifecycleOwner = LocalLifecycleOwner.current
+DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_PAUSE) {
+            PreviewPlayer.stop()
+        }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+}
+
+// When leaving screen
+DisposableEffect(Unit) {
+    onDispose { PreviewPlayer.stop() }
+}
+```
+
+<Warning>
+Always ensure the preview player is stopped when navigating away to prevent background audio playback.
+</Warning>
+
+## Best Practices
+
+### Performance
+
+1. **State Restoration** - Search results are preserved when navigating back
+2. **Efficient Pagination** - Load more results only when approaching the bottom
+3. **Memory Management** - Preview player uses a singleton pattern
+4. **Image Loading** - Coil library handles async image loading with caching
+
+### UX Considerations
+
+1. **Marquee Text** - Long titles scroll automatically for better readability
+2. **Download Indicators** - Clear visual feedback for download status
+3. **Empty States** - Helpful messages when no results are found
+4. **Loading States** - Spinner indicates when fetching data
+
+## API Response Handling
+
+The search response includes pagination metadata:
+
+```kotlin
+data class TrackSearchResponse(
+    val data: List<Track>,
+    val total: Int,
+    val next: String?  // URL for next page
+)
+```
+
+The `next` URL is used for infinite scrolling:
+
+```kotlin
+@GET
+suspend fun searchTracksByUrl(@Url url: String): TrackSearchResponse
+```

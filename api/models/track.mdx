@@ -1,0 +1,121 @@
+---
+title: 'Track'
+description: 'Track data model representing a music track in Deeztracker Mobile'
+---
+
+## Overview
+
+The `Track` data class represents a music track in Deeztracker Mobile. It contains metadata about a track including title, artist, album information, and playback URLs. The Track model can be converted to a Media3 `MediaItem` for playback.
+
+## Track Model
+
+Defined in `app/src/main/java/com/crowstar/deeztrackermobile/data/model/Track.kt`
+
+### Properties
+
+<ResponseField name="id" type="String" required>
+  Unique identifier for the track
+</ResponseField>
+
+<ResponseField name="title" type="String" required>
+  Title of the track
+</ResponseField>
+
+<ResponseField name="artist" type="String" required>
+  Artist name for the track
+</ResponseField>
+
+<ResponseField name="album" type="String" required>
+  Album name the track belongs to
+</ResponseField>
+
+<ResponseField name="duration" type="Long" required>
+  Duration of the track in milliseconds
+</ResponseField>
+
+<ResponseField name="coverUrl" type="String?">
+  Optional URL to the track's cover art image. Can be null if no cover is available.
+</ResponseField>
+
+<ResponseField name="streamUrl" type="String" required>
+  URL for streaming/playing the track audio
+</ResponseField>
+
+## Methods
+
+### toMediaItem()
+
+Converts the Track to a Media3 `MediaItem` for playback in the media player.
+
+```kotlin
+fun toMediaItem(): MediaItem
+```
+
+This method creates a `MediaItem` with:
+- Media ID set to the track's `id`
+- URI set to the `streamUrl`
+- Metadata including title, artist, album title, and artwork URI
+
+## Example Usage
+
+### Creating a Track
+
+```kotlin
+val track = Track(
+    id = "12345",
+    title = "Bohemian Rhapsody",
+    artist = "Queen",
+    album = "A Night at the Opera",
+    duration = 354000L, // 5:54 in milliseconds
+    coverUrl = "https://example.com/cover.jpg",
+    streamUrl = "https://example.com/stream/12345"
+)
+```
+
+### Converting to MediaItem
+
+```kotlin
+val mediaItem = track.toMediaItem()
+// Use with Media3 ExoPlayer
+player.setMediaItem(mediaItem)
+```
+
+## Source Code
+
+```kotlin
+package com.crowstar.deeztrackermobile.data.model
+
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+
+data class Track(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val duration: Long,
+    val coverUrl: String?,
+    val streamUrl: String
+) {
+    fun toMediaItem(): MediaItem {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(artist)
+            .setAlbumTitle(album)
+            .setArtworkUri(coverUrl?.let { Uri.parse(it) })
+            .build()
+
+        return MediaItem.Builder()
+            .setMediaId(id)
+            .setUri(streamUrl)
+            .setMediaMetadata(metadata)
+            .build()
+    }
+}
+```
+
+## Related Models
+
+- [Album](/api/models/album) - Album model that contains a list of tracks
+- [Playlist](/api/models/playlist) - Playlist models that reference tracks

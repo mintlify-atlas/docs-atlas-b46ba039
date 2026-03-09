@@ -1,80 +1,587 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start Guide
+description: Get started with Deeztracker Mobile - from authentication to downloading your first track
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through setting up Deeztracker Mobile and downloading your first music tracks. By the end, you'll know how to:
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- Obtain and use your Deezer ARL token
+- Search for music across tracks, albums, and playlists
+- Download music in your preferred quality
+- Play and manage your offline music library
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Make sure you've already [installed Deeztracker Mobile](/installation) before proceeding with this guide.
 </Note>
+
+## Getting Your Deezer ARL Token
+
+The ARL (Authentication Resource Locator) token is required to authenticate with Deezer. Here's how to get it:
+
+<Steps>
+  <Step title="Log in to Deezer in Your Browser">
+    Open your web browser and navigate to [deezer.com](https://www.deezer.com). Log in with your Deezer account credentials.
+    
+    <Warning>
+      Use a desktop or mobile browser, not the Deezer app. The ARL token is only accessible through the website.
+    </Warning>
+  </Step>
+
+  <Step title="Open Browser Developer Tools">
+    **On Desktop (Chrome/Edge/Firefox):**
+    - Press `F12` or right-click anywhere and select **Inspect**
+    - Click on the **Application** tab (Chrome/Edge) or **Storage** tab (Firefox)
+    
+    **On Mobile (Chrome):**
+    - Type `chrome://inspect` in the address bar
+    - Enable USB debugging on your device
+    - Or use the desktop instructions via Chrome's mobile site
+  </Step>
+
+  <Step title="Find the ARL Cookie">
+    1. In the left sidebar, expand **Cookies**
+    2. Click on `https://www.deezer.com`
+    3. Look for a cookie named **`arl`**
+    4. The **Value** column contains your ARL token (a long string of random characters)
+    
+    <Note>
+      The ARL token typically looks like: `abc123def456ghi789jkl012mno345pqr678stu901vwx234yz...` (approximately 192 characters)
+    </Note>
+  </Step>
+
+  <Step title="Copy the ARL Token">
+    1. Click on the ARL cookie value to select it
+    2. Copy the entire string (Ctrl+C or Cmd+C)
+    3. Make sure you copy the complete value without extra spaces
+    
+    <Warning>
+      Keep your ARL token private! It provides full access to your Deezer account. Never share it publicly.
+    </Warning>
+  </Step>
+
+  <Step title="Enter ARL in Deeztracker">
+    1. Open Deeztracker Mobile on your device
+    2. You'll see the login screen with an ARL input field
+    3. Paste your ARL token into the text field
+    4. Tap the **Login** button
+    
+    ```kotlin
+    // The app verifies your ARL using the RustDeezerService
+    val rustService = RustDeezerService(context)
+    val success = rustService.login(arl)
+    
+    if (success) {
+        // ARL is valid and saved to SharedPreferences
+        // You're now logged in!
+    }
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  Your ARL token is securely stored in the app's private storage. You won't need to enter it again unless you log out or reinstall the app.
+</Info>
+
+## Configuring Settings
+
+Before downloading music, configure your preferences:
+
+<Steps>
+  <Step title="Open Settings">
+    After logging in, navigate to the **Settings** screen:
+    - Tap the menu icon (≡) or navigate to the Settings tab
+  </Step>
+
+  <Step title="Set Audio Quality">
+    Choose your preferred download quality:
+    
+    <CodeGroup>
+    ```kotlin MP3 128kbps (Default)
+    // Smallest file size, good for saving storage
+    // ~3-5 MB per song
+    // Works with free Deezer accounts
+    DownloadQuality.MP3_128
+    ```
+    
+    ```kotlin MP3 320kbps
+    // High quality, balanced file size
+    // ~8-12 MB per song  
+    // Requires Deezer Premium
+    DownloadQuality.MP3_320
+    ```
+    
+    ```kotlin FLAC (Lossless)
+    // Best quality, largest file size
+    // ~25-40 MB per song
+    // Requires Deezer HiFi subscription
+    DownloadQuality.FLAC
+    ```
+    </CodeGroup>
+    
+    <Note>
+      Your account type limits available quality options. Free accounts are typically restricted to MP3 128kbps.
+    </Note>
+  </Step>
+
+  <Step title="Choose Download Location">
+    Select where downloaded music will be saved:
+    
+    - **Music Folder** (default): `Storage/Music/Deeztracker/`
+    - **Downloads Folder**: `Storage/Downloads/Deeztracker/`
+    
+    ```kotlin
+    // The app determines the download directory based on your setting
+    val downloadDirectory: String
+        get() {
+            val locationPref = prefs.getString("download_location", "MUSIC")
+            val rootDir = if (locationPref == "DOWNLOADS") {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            } else {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+            }
+            return File(rootDir, "Deeztracker").absolutePath
+        }
+    ```
+  </Step>
+
+  <Step title="Select Language">
+    Choose your interface language:
+    - **English** (default)
+    - **Spanish** (Español)
+  </Step>
+</Steps>
+
+## Searching for Music
+
+Deeztracker offers multiple ways to search for music:
+
+### Search by Track
+
+<Steps>
+  <Step title="Open Search Tab">
+    Navigate to the **Search** screen and select **Tracks**.
+  </Step>
+
+  <Step title="Enter Search Query">
+    Type your search query in the format:
+    - `Artist - Song Title` (e.g., "The Beatles - Hey Jude")
+    - Or just the song title: `Song Title`
+    
+    ```kotlin
+    // The app uses Deezer's public API for search
+    suspend fun searchTracks(query: String): List<Track> {
+        return deezerApiService.searchTracks(query).data
+    }
+    ```
+  </Step>
+
+  <Step title="Browse Results">
+    Results appear instantly showing:
+    - Track title
+    - Artist name
+    - Album name and artwork
+    - Duration
+    
+    Tap any track to see options or start downloading.
+  </Step>
+</Steps>
+
+### Search by Album
+
+To download entire albums:
+
+1. Select the **Albums** tab in Search
+2. Search for the album name or artist
+3. Browse results with album artwork
+4. Tap an album to view all tracks
+5. Download the entire album or individual tracks
+
+### Search by Artist
+
+Explore an artist's discography:
+
+1. Select the **Artists** tab
+2. Search for the artist name
+3. View artist profile with:
+   - Top tracks
+   - Albums and singles
+   - Artist photo
+
+### Search by Playlist
+
+Import Deezer playlists:
+
+1. Select the **Playlists** tab
+2. Search for playlist names
+3. View playlist details:
+   - Track count
+   - Creator
+   - Duration
+4. Download the entire playlist
+
+<Note>
+  Deeztracker searches Deezer's catalog using their public API. The app itself doesn't host any music content.
+</Note>
+
+## Downloading Your First Track
+
+Let's download a song:
+
+<Steps>
+  <Step title="Find a Track">
+    Use the search feature to find a song you want to download. For this example, let's search for "Bohemian Rhapsody".
+  </Step>
+
+  <Step title="Initiate Download">
+    1. Tap on the track in the search results
+    2. Tap the **Download** button (⬇ icon)
+    3. The download starts immediately
+    
+    ```kotlin
+    // Download process using the DownloadManager
+    val downloadManager = DownloadManager.getInstance(context)
+    downloadManager.startTrackDownload(
+        trackId = track.id,
+        title = track.title
+    )
+    ```
+  </Step>
+
+  <Step title="Monitor Progress">
+    You'll see a download notification showing:
+    - Current track being downloaded
+    - Download progress
+    - Estimated time remaining
+    
+    <Info>
+      Downloads happen in the background. You can continue using the app or even close it - downloads will continue.
+    </Info>
+  </Step>
+
+  <Step title="Check Downloads Section">
+    Once complete:
+    1. Navigate to the **Downloads** tab
+    2. Your track appears in the list
+    3. The file is saved to your chosen download location
+    
+    <Note>
+      The app automatically scans downloaded files into Android's MediaStore, making them accessible to other music players too.
+    </Note>
+  </Step>
+</Steps>
+
+### Understanding Download States
+
+The download system has several states:
+
+<CodeGroup>
+```kotlin Idle
+// No downloads in progress
+DownloadState.Idle
+```
+
+```kotlin Downloading
+// Download in progress
+DownloadState.Downloading(
+    type = DownloadType.TRACK,
+    title = "Bohemian Rhapsody",
+    itemId = "12345"
+)
+```
+
+```kotlin Completed
+// Download finished successfully
+DownloadState.Completed(
+    type = DownloadType.TRACK,
+    title = "Bohemian Rhapsody",
+    successCount = 1
+)
+```
+
+```kotlin Error
+// Download failed
+DownloadState.Error(
+    title = "Bohemian Rhapsody",
+    message = "Network error"
+)
+```
+</CodeGroup>
+
+## Downloading Albums and Playlists
+
+### Download Full Album
+
+<Steps>
+  <Step title="Find the Album">
+    Search for the album in the Albums tab.
+  </Step>
+
+  <Step title="Start Album Download">
+    Tap the album, then tap **Download Album**.
+    
+    ```kotlin
+    // Album downloads process each track sequentially
+    downloadManager.startAlbumDownload(
+        albumId = album.id,
+        title = album.title
+    )
+    
+    // The DownloadManager automatically:
+    // 1. Fetches all tracks in the album
+    // 2. Checks for duplicates (skips already downloaded)
+    // 3. Downloads each track with proper metadata
+    // 4. Updates progress for each track
+    ```
+  </Step>
+
+  <Step title="Track Progress">
+    The app shows:
+    - Current track being downloaded
+    - Overall progress (e.g., "Track 5 of 12")
+    - Success/skipped/failed counts
+  </Step>
+</Steps>
+
+<Warning>
+  Large albums or playlists can take significant time and storage. Ensure you have sufficient space and a stable internet connection.
+</Warning>
+
+### Duplicate Detection
+
+Deeztracker automatically prevents re-downloading existing tracks:
+
+```kotlin
+// The app normalizes titles and artists to check for matches
+suspend fun isTrackDownloaded(trackTitle: String, artistName: String): Boolean {
+    val localTracks = musicRepository.getAllTracks()
+    
+    // Title: Strip 'feat', lowercase, remove non-alphanumeric
+    val normalizedTitle = normalizeTitle(trackTitle)
+    val normalizedArtist = normalizeArtist(artistName)
+    
+    return localTracks.any { track ->
+        val localTitle = normalizeTitle(track.title)
+        val localArtist = normalizeArtist(track.artist)
+        
+        localTitle == normalizedTitle && 
+        (localArtist.contains(normalizedArtist) || normalizedArtist.contains(localArtist))
+    }
+}
+```
+
+<Note>
+  Skipped tracks (already downloaded) are counted separately and don't re-download, saving time and bandwidth.
+</Note>
+
+## Playing Downloaded Music
+
+Once you've downloaded music:
+
+<Steps>
+  <Step title="Navigate to Local Music">
+    Tap the **Library** or **Local Music** tab to see your downloaded tracks.
+  </Step>
+
+  <Step title="Browse Your Library">
+    View your music organized by:
+    - **All Tracks**: Complete list with fast scrolling
+    - **Albums**: Grouped by album
+    - **Artists**: Grouped by artist
+  </Step>
+
+  <Step title="Play a Track">
+    Tap any track to start playback. The player screen shows:
+    - Album artwork with blurred background
+    - Track title and artist
+    - Playback controls (play/pause, next, previous)
+    - Progress bar (tap to seek)
+    - Shuffle and repeat buttons
+    - Add to favorites button
+  </Step>
+
+  <Step title="View Synchronized Lyrics">
+    If lyrics are available:
+    1. Tap the **Lyrics** button on the player screen
+    2. Lyrics automatically scroll as the song plays
+    3. Tap any line to jump to that timestamp
+    
+    ```kotlin
+    // Lyrics are fetched from LrcLib API and parsed
+    // Format: [mm:ss.xx]Lyric line
+    // Example: [00:12.50]Is this the real life?
+    ```
+  </Step>
+</Steps>
+
+### Player Features
+
+<CardGroup cols={2}>
+  <Card title="Volume Boost" icon="volume-high">
+    Use hardware volume buttons to boost up to 200% for quiet tracks
+  </Card>
+  <Card title="Repeat Modes" icon="repeat">
+    Off, Repeat All, or Repeat One for continuous playback
+  </Card>
+  <Card title="Shuffle" icon="shuffle">
+    Randomize playback order for variety
+  </Card>
+  <Card title="Background Play" icon="mobile">
+    Continue listening with screen off or in other apps
+  </Card>
+</CardGroup>
+
+## Managing Your Music Library
+
+### Create Playlists
+
+<Steps>
+  <Step title="Open Playlists">
+    Navigate to the **Playlists** section in Local Music.
+  </Step>
+
+  <Step title="Create New Playlist">
+    1. Tap the **+** or **Create Playlist** button
+    2. Enter a playlist name
+    3. Tap **Create**
+  </Step>
+
+  <Step title="Add Tracks">
+    From any track:
+    1. Tap the **•••** (more) button
+    2. Select **Add to Playlist**
+    3. Choose your playlist
+    
+    ```kotlin
+    // Playlists are stored in SharedPreferences
+    data class LocalPlaylist(
+        val id: String,
+        val name: String,
+        val trackIds: List<Long>,
+        val createdAt: Long
+    )
+    ```
+  </Step>
+</Steps>
+
+### Edit Track Metadata
+
+Customize track information:
+
+1. Long-press any track in your library
+2. Select **Edit Metadata**
+3. Modify:
+   - Track title
+   - Artist name
+   - Album name
+4. Changes are saved to the file's ID3 tags
+
+<Note>
+  Metadata changes use JAudioTagger library and are written directly to the audio file.
+</Note>
+
+### Share and Delete Tracks
+
+- **Share**: Tap the share icon to send the file via other apps
+- **Delete**: Long-press a track and select Delete to remove it
+
+## Troubleshooting Common Issues
+
+<AccordionGroup>
+  <Accordion title="Login Failed / Invalid ARL">
+    **Problem**: Can't log in with ARL token.
+    
+    **Solutions**:
+    - Verify you copied the entire ARL token (no spaces, complete string)
+    - Make sure you're logged into Deezer in your browser
+    - ARL tokens can expire - try logging out and back into Deezer, then get a fresh token
+    - Check your internet connection
+  </Accordion>
+  
+  <Accordion title="Downloads Failing">
+    **Problem**: Downloads start but fail or show errors.
+    
+    **Solutions**:
+    - Check your internet connection (Wi-Fi recommended for large downloads)
+    - Verify you have sufficient storage space
+    - For high-quality formats (320kbps/FLAC), ensure you have a Premium/HiFi Deezer account
+    - Some tracks may not be available in certain regions or quality levels
+    - Check storage permissions: Settings → Apps → Deeztracker → Permissions
+  </Accordion>
+  
+  <Accordion title="Downloaded Files Not Appearing">
+    **Problem**: Downloads complete but tracks don't show in library.
+    
+    **Solutions**:
+    - Wait a few seconds - MediaStore scanning can take time
+    - Manually refresh: Pull down on the library screen
+    - Check the physical folder: `Music/Deeztracker/` or `Downloads/Deeztracker/`
+    - Restart the app to trigger a library rescan
+  </Accordion>
+  
+  <Accordion title="Playback Issues">
+    **Problem**: Music won't play or stops unexpectedly.
+    
+    **Solutions**:
+    - Verify the file was fully downloaded (check file size)
+    - Try playing in another music player to confirm the file is valid
+    - Clear app cache: Settings → Apps → Deeztracker → Storage → Clear Cache
+    - For FLAC files, ensure your device supports the codec
+  </Accordion>
+  
+  <Accordion title="No Lyrics Available">
+    **Problem**: Lyrics don't appear for a song.
+    
+    **Solutions**:
+    - Lyrics depend on availability in the LrcLib database
+    - Not all songs have synchronized lyrics
+    - Check your internet connection (lyrics are fetched on-demand)
+    - Some tracks may only have unsynchronized lyrics (not supported yet)
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Tips
+
+<CardGroup cols={2}>
+  <Card title="Batch Downloads" icon="list-check">
+    Download multiple albums or playlists overnight. Queue them up and let the download manager handle them sequentially.
+  </Card>
+  
+  <Card title="Storage Management" icon="folder-tree">
+    Downloaded files are organized by artist and album in subfolders for easy manual management.
+  </Card>
+  
+  <Card title="Quality Switching" icon="sliders">
+    You can change quality settings anytime. New downloads will use the updated quality setting.
+  </Card>
+  
+  <Card title="Offline Access" icon="plane">
+    Once downloaded, all music is fully offline. No internet required for playback.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+You're now ready to build your offline music library! Here are some things to explore:
+
+- **Explore Search**: Try searching by different criteria (artist, album, playlist)
+- **Build Playlists**: Organize your music into custom collections
+- **Discover Quality**: Compare MP3 vs FLAC quality on your device
+- **Customize Settings**: Adjust download location and language preferences
+
+<Note>
+  Remember to respect copyright laws and use Deeztracker Mobile for personal use only.
+</Note>
+
+## Getting Help
+
+If you encounter issues not covered in this guide:
+
+1. Check the [Installation Guide](/installation#troubleshooting-installation-issues) for setup problems
+2. Visit the GitHub repository to report bugs or request features
+3. Review the source code to understand how specific features work
+
+<Info>
+  Deeztracker Mobile is open-source! Contributions and feedback are welcome on GitHub.
+</Info>

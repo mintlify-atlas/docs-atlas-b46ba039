@@ -1,0 +1,433 @@
+---
+title: Managing Playlists
+description: Learn how to create, organize, and manage playlists in Deeztracker Mobile
+---
+
+## Overview
+
+Deeztracker Mobile provides powerful playlist management features to organize your downloaded music collection. Create custom playlists, import playlists from Deezer, and manage your favorites.
+
+## Creating New Playlists
+
+You can create playlists in multiple ways:
+
+### From the Playlists Tab
+
+<Steps>
+  <Step title="Navigate to Playlists">
+    Open **Local Music** and switch to the **Playlists** tab.
+  </Step>
+
+  <Step title="Tap Create Playlist">
+    Tap the large **"+" button** at the top of the screen.
+  </Step>
+
+  <Step title="Name Your Playlist">
+    - Enter a name for your playlist in the dialog
+    - Tap **"Create"** to confirm
+    - Your new playlist appears in the list
+  </Step>
+</Steps>
+
+```kotlin LocalPlaylistsScreen.kt:74-104
+item {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onCreatePlaylist)
+            .padding(vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(80.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Primary.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = null,
+                tint = Primary,
+                modifier = Modifier.size(48.dp)
+            )
+        }
+```
+
+### From the Player
+
+While a track is playing:
+
+<Steps>
+  <Step title="Open Player Menu">
+    Tap the **three dots (⋯)** button in the top-right of the player screen.
+  </Step>
+
+  <Step title="Select Add to Playlist">
+    Choose **"Add to Playlist"** from the menu.
+  </Step>
+
+  <Step title="Create or Select">
+    - Select an existing playlist, OR
+    - Tap **"Create New Playlist"**
+    - Enter a name and save
+  </Step>
+</Steps>
+
+### From Track Context Menu
+
+From any track in your library:
+
+1. Tap the **three dots (⋮)** next to a track
+2. Select **"Add to Playlist"**
+3. Choose existing or create new
+
+## Adding Tracks to Playlists
+
+There are multiple ways to add tracks to your playlists:
+
+### Method 1: From Track Menu
+
+<Steps>
+  <Step title="Open Track Menu">
+    In the **Local Music** or **Downloads** screen, tap the three-dot menu (⋮) next to any track.
+  </Step>
+
+  <Step title="Select Add to Playlist">
+    Choose **"Add to Playlist"** from the dropdown menu.
+  </Step>
+
+  <Step title="Choose Playlist">
+    A bottom sheet appears with all your playlists. Tap the playlist you want to add the track to.
+  </Step>
+</Steps>
+
+### Method 2: During Download
+
+When downloading from Deezer:
+
+1. Start a track download
+2. The download system can optionally add it to a target playlist
+3. This is handled automatically by the DownloadManager
+
+```kotlin DownloadManager.kt:211-215
+if (request.playlistId != null) {
+    Log.d(TAG, "Adding downloaded track $trackId to playlist ${request.playlistId}")
+    playlistRepository.addTrackToPlaylist(request.playlistId, trackId)
+}
+```
+
+### Method 3: From Player
+
+While music is playing, use the player menu to add the current track to any playlist.
+
+## Removing Tracks from Playlists
+
+<Steps>
+  <Step title="Open Playlist">
+    Navigate to **Local Music** → **Playlists** tab and tap on a playlist to open it.
+  </Step>
+
+  <Step title="Open Track Menu">
+    Tap the three-dot menu (⋮) next to the track you want to remove.
+  </Step>
+
+  <Step title="Remove Track">
+    Select **"Remove from Playlist"** (or "Delete" depending on context).
+  </Step>
+</Steps>
+
+<Note>
+Removing a track from a playlist doesn't delete the actual audio file. The track remains in your library and other playlists.
+</Note>
+
+## Editing Playlist Details
+
+You can rename and modify playlists after creation:
+
+### Renaming a Playlist
+
+<Steps>
+  <Step title="Open Playlists Tab">
+    Go to **Local Music** → **Playlists**.
+  </Step>
+
+  <Step title="Open Playlist Menu">
+    Tap the three-dot menu (⋮) next to the playlist you want to rename.
+  </Step>
+
+  <Step title="Select Edit">
+    Choose **"Edit"** from the menu.
+  </Step>
+
+  <Step title="Enter New Name">
+    - Type the new name in the dialog
+    - Tap **"Save"** to confirm
+  </Step>
+</Steps>
+
+```kotlin LocalPlaylistsScreen.kt:148-155
+DropdownMenuItem(
+    text = { Text(stringResource(R.string.action_edit), color = Color.White) },
+    onClick = {
+        showMenu = false
+        showEditDialog = true
+    }
+)
+```
+
+### Deleting a Playlist
+
+<Steps>
+  <Step title="Open Playlist Menu">
+    From the Playlists tab, tap the menu (⋮) next to the playlist.
+  </Step>
+
+  <Step title="Select Delete">
+    Choose **"Delete"** from the menu (shown in red).
+  </Step>
+
+  <Step title="Confirm">
+    The playlist is immediately deleted. Track files remain intact.
+  </Step>
+</Steps>
+
+<Warning>
+**Favorites Playlist**: The built-in "Favorites" playlist cannot be edited or deleted. It's managed automatically when you like/unlike tracks.
+</Warning>
+
+## Importing Deezer Playlists
+
+Deeztracker allows you to import playlists directly from your Deezer account:
+
+<Steps>
+  <Step title="Navigate to Import">
+    Go to **Local Music** → **Playlists** tab.
+  </Step>
+
+  <Step title="Tap Import Button">
+    Tap the **import icon (⤓)** in the top-right corner of the screen.
+  </Step>
+
+  <Step title="Select Deezer Playlist">
+    - A list of your Deezer playlists appears
+    - Browse and tap on a playlist to import it
+  </Step>
+
+  <Step title="Download Tracks">
+    - The app creates a local playlist with the same name
+    - Optionally, you can download all tracks in the playlist
+    - Tracks are automatically added to the local playlist as they download
+  </Step>
+</Steps>
+
+```kotlin LocalMusicScreen.kt:297-301
+if (selectedView == 3) { // Playlists Tab
+    IconButton(onClick = onImportPlaylist) {
+        Icon(Icons.Default.Input, contentDescription = "Import Playlist", tint = Color.White)
+    }
+}
+```
+
+<Info>
+Importing a playlist from Deezer creates a local copy but doesn't automatically download the tracks. You'll need to download tracks separately if you want offline access.
+</Info>
+
+## Organizing Your Collection
+
+### Playlist Strategies
+
+Here are some effective ways to organize your music:
+
+<CardGroup cols={2}>
+  <Card title="By Genre" icon="music">
+    Create playlists for different music genres:
+    - Rock
+    - Jazz
+    - Electronic
+    - Hip-Hop
+  </Card>
+
+  <Card title="By Mood" icon="heart">
+    Organize by mood or activity:
+    - Workout
+    - Relaxing
+    - Focus
+    - Party
+  </Card>
+
+  <Card title="By Time Period" icon="clock">
+    Sort by when you discovered the music:
+    - New Discoveries
+    - 2023 Favorites
+    - Throwbacks
+  </Card>
+
+  <Card title="By Quality" icon="star">
+    Group by audio quality:
+    - FLAC Collection
+    - High Quality (320kbps)
+    - Standard
+  </Card>
+</CardGroup>
+
+### Playlist Management Tips
+
+<Card title="Best Practices" icon="lightbulb">
+  - **Keep playlists focused**: Limit playlists to 20-50 tracks for easier navigation
+  - **Use descriptive names**: "Chill Evening" is better than "Playlist 1"
+  - **Regular cleanup**: Remove tracks you no longer want
+  - **Backup with export**: Consider periodically exporting important playlists
+  - **Use Favorites wisely**: Star only your absolute favorites for quick access
+</Card>
+
+## Playing Playlists
+
+Once you've created playlists, you can play them:
+
+### Standard Play
+
+1. Navigate to **Local Music** → **Playlists**
+2. Tap on a playlist to open it
+3. Tap the **Play** button to start from the first track
+4. Tracks play in order
+
+### Shuffle Play
+
+1. Open a playlist
+2. Tap the **Shuffle** button
+3. Tracks play in random order
+
+```kotlin LocalMusicScreen.kt:259-265
+onShufflePlaylist = {
+    val playlistTracks = selectedPlaylist.trackIds.mapNotNull { id -> unfilteredTracks.find { it.id == id } }
+    if (playlistTracks.isNotEmpty()) {
+        val shuffled = playlistTracks.shuffled()
+        onTrackClick(shuffled.first(), shuffled, selectedPlaylist.name)
+    }
+}
+```
+
+### Play from Track
+
+1. Open a playlist
+2. Tap any track in the playlist
+3. Playback starts from that track and continues through the playlist
+
+## Favorites Playlist
+
+The **Favorites** playlist is automatically managed:
+
+### Adding to Favorites
+
+- Tap the **heart icon (❤️)** in the player while a track is playing
+- Or use "Add to Favorites" from track menus
+- Track is automatically added to your Favorites playlist
+
+### Removing from Favorites
+
+- Tap the filled heart icon (❤️) again while playing
+- Or remove from the Favorites playlist directly
+
+<Info>
+The Favorites playlist is stored with ID "favorites" and is automatically created when you first favorite a track.
+</Info>
+
+## Playlist Storage
+
+Playlists are stored locally on your device:
+
+- **Location**: App's private storage (SharedPreferences or local database)
+- **Format**: JSON-based playlist definitions
+- **Track references**: Playlists store track IDs, not the actual files
+- **Persistence**: Playlists survive app updates and restarts
+
+```kotlin LocalPlaylistRepository.kt
+class LocalPlaylistRepository(context: Context) {
+    private val prefs = context.getSharedPreferences("playlists", Context.MODE_PRIVATE)
+    // Playlists stored as JSON in SharedPreferences
+}
+```
+
+## Common Playlist Issues
+
+<AccordionGroup>
+  <Accordion title="Playlist Shows Missing Tracks">
+    **Possible causes:**
+    - Tracks were deleted from device
+    - Files were moved to different location
+    - MediaStore hasn't refreshed
+
+    **Solutions:**
+    1. Tap the refresh button (↻) on Local Music screen
+    2. Remove missing tracks from playlist manually
+    3. Re-download missing tracks
+    4. Recreate playlist if many tracks are missing
+  </Accordion>
+
+  <Accordion title="Can't Create New Playlist">
+    **Solutions:**
+    1. Ensure playlist name is unique
+    2. Don't use special characters in playlist names
+    3. Keep playlist names under 50 characters
+    4. Restart app if issue persists
+  </Accordion>
+
+  <Accordion title="Imported Playlist is Empty">
+    **This is normal**: Importing a Deezer playlist creates the structure but doesn't download tracks.
+    
+    **Solutions:**
+    1. Download tracks from Deezer individually
+    2. Or download the entire playlist from Deezer's playlist view
+    3. Tracks will automatically link to the imported playlist
+  </Accordion>
+
+  <Accordion title="Playlist Won't Delete">
+    **Possible causes:**
+    - Trying to delete the Favorites playlist (protected)
+    
+    **Solutions:**
+    1. Favorites playlist cannot be deleted (by design)
+    2. For other playlists, try restarting the app
+    3. If issue persists, clear app cache in Android settings
+  </Accordion>
+
+  <Accordion title="Changes Not Saving">
+    **Possible causes:**
+    - App was force-closed before saving
+    - Storage permission issue
+    
+    **Solutions:**
+    1. Give app time to save (don't force-close immediately)
+    2. Check app has storage permissions
+    3. Ensure device isn't low on storage
+    4. Try making changes again
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Playlist Features
+
+### Track Statistics
+
+View playlist statistics:
+- Track count displayed below playlist name
+- Total duration shown in playlist header
+- Storage size when viewing playlist details
+
+### Playlist Artwork
+
+Playlist artwork is automatically generated:
+- Uses artwork from the first track in the playlist
+- Updates when first track changes
+- Falls back to default icon if no artwork available
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Download More Music" icon="download" href="/guide/downloading-music">
+    Add more tracks to expand your playlists
+  </Card>
+  <Card title="Configure Settings" icon="gear" href="/guide/settings">
+    Customize your playback and storage preferences
+  </Card>
+</CardGroup>

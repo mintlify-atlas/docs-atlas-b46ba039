@@ -1,0 +1,473 @@
+---
+title: Download Management
+description: Download tracks, albums, and playlists with configurable quality settings and intelligent duplicate detection
+icon: download
+---
+
+## Overview
+
+Deeztracker Mobile provides a robust download system powered by a Rust backend (Rusteer) that handles high-quality audio downloads from Deezer. The download manager uses a queue-based architecture to handle sequential downloads with proper error handling and duplicate detection.
+
+## Download Manager Architecture
+
+The `DownloadManager` is a singleton that survives navigation and manages all download operations:
+
+```kotlin
+class DownloadManager private constructor(
+    private val context: Context,
+    private val musicRepository: LocalMusicRepository,
+    private val playlistRepository: LocalPlaylistRepository
+) {
+    companion object {
+        @Volatile
+        private var INSTANCE: DownloadManager? = null
+        
+        fun getInstance(context: Context): DownloadManager {
+            return INSTANCE ?: synchronized(this) {
+                // Create singleton instance
+            }
+        }
+    }
+    
+    private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val downloadChannel = Channel<DownloadRequest>(20)
+}
+```
+
+<Info>
+The download manager uses its own coroutine scope with `SupervisorJob`, ensuring downloads continue even if navigation changes occur.
+</Info>
+
+## Quality Options
+
+Deeztracker supports three quality levels configured via RusteerService:
+
+### Available Qualities
+
+| Quality | Bitrate | Format | File Size (approx.) |
+|---------|---------|--------|---------------------|
+| MP3_128 | 128 kbps | MP3 | ~3-4 MB per track |
+| MP3_320 | 320 kbps | MP3 | ~8-10 MB per track |
+| FLAC | Lossless | FLAC | ~30-40 MB per track |
+
+### Quality Selection
+
+Quality is retrieved dynamically from SharedPreferences:
+
+```kotlin
+val currentQuality: DownloadQuality
+    get() {
+        val saved = prefs.getString("audio_quality", "MP3_128")
+        return when (saved) {
+            "MP3_320" -> DownloadQuality.MP3_320
+            "FLAC" -> DownloadQuality.FLAC
+            else -> DownloadQuality.MP3_128
+        }
+    }
+```
+
+<Tip>
+Users can change the download quality in Settings, and the new quality applies to all subsequent downloads.
+</Tip>
+
+## Storage Location
+
+Downloads are saved to a configurable directory:
+
+```kotlin
+val downloadDirectory: String
+    get() {
+        val locationPref = prefs.getString("download_location", "MUSIC")
+        val rootDir = if (locationPref == "DOWNLOADS") {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        } else {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        }
+        
+        val deezDir = File(rootDir, "Deeztracker")
+        if (!deezDir.exists()) {
+            deezDir.mkdirs()
+        }
+        return deezDir.absolutePath
+    }
+```
+
+Default locations:
+- **Music**: `/storage/emulated/0/Music/Deeztracker/`
+- **Downloads**: `/storage/emulated/0/Download/Deeztracker/`
+
+## Download Process
+
+### RusteerService Integration
+
+The download process uses a Rust backend for high-performance downloads:
+
+```kotlin
+class RustDeezerService(context: Context) {
+    private val service = RusteerService()
+    
+    suspend fun downloadTrack(
+        trackId: String,
+        outputDir: String,
+        quality: DownloadQuality
+    ): DownloadResult = withContext(Dispatchers.IO) {
+        val arl = getSavedArl() ?: throw IllegalStateException("Not logged in")
+        val result = service.downloadTrack(arl, trackId, outputDir, quality)
+        return result
+    }
+}
+```
+
+### Download Result
+
+The Rust service returns comprehensive metadata:
+
+```kotlin
+data class DownloadResult(
+    val path: String,        // Full file path
+    val quality: String,     // Actual quality downloaded
+    val size: Long,          // File size in bytes
+    val title: String,       // Track title
+    val artist: String       // Artist name
+)
+```
+
+## Queue-Based Downloads
+
+Downloads are processed sequentially through a channel:
+
+```kotlin
+private val downloadChannel = Channel<DownloadRequest>(20)  // Max 20 queued items
+
+init {
+    managerScope.launch {
+        for (request in downloadChannel) {
+            processRequest(request)
+        }
+    }
+}
+
+fun startTrackDownload(trackId: Long, title: String, targetPlaylistId: String? = null): Boolean {
+    downloadChannel.trySend(DownloadRequest.Track(trackId, title, targetPlaylistId))
+    return true
+}
+```
+
+<Note>
+The queue is limited to 20 items to prevent memory saturation. Additional requests will be rejected if the queue is full.
+</Note>
+
+## Download States
+
+The download manager exposes state through StateFlow:
+
+```kotlin
+sealed class DownloadState {
+    object Idle : DownloadState()
+    
+    data class Downloading(
+        val type: DownloadType,
+        val title: String,
+        val itemId: String,
+        val currentTrackId: String? = null
+    ) : DownloadState()
+    
+    data class Completed(
+        val type: DownloadType,
+        val title: String,
+        val successCount: Int,
+        val failedCount: Int = 0,
+        val skippedCount: Int = 0
+    ) : DownloadState()
+    
+    data class Error(
+        val title: String,
+        val message: String
+    ) : DownloadState()
+}
+```
+
+### State Flow Usage
+
+```kotlin
+val downloadManager = DownloadManager.getInstance(context)
+val downloadState by downloadManager.downloadState.collectAsState()
+
+when (downloadState) {
+    is DownloadState.Downloading -> showProgressIndicator()
+    is DownloadState.Completed -> showSuccessMessage()
+    is DownloadState.Error -> showErrorMessage()
+    else -> {}
+}
+```
+
+## Progress Tracking
+
+Progress is tracked at multiple levels:
+
+### Individual Track Progress
+
+```kotlin
+_downloadState.value = DownloadState.Downloading(
+    type = DownloadType.TRACK,
+    title = request.title,
+    itemId = track.id.toString()
+)
+```
+
+### Bulk Download Progress
+
+For albums and playlists, progress tracks the current item:
+
+```kotlin
+_downloadState.value = DownloadState.Downloading(
+    type = DownloadType.ALBUM,
+    title = albumTitle,
+    itemId = albumId.toString(),
+    currentTrackId = currentTrack.id.toString()  // Currently downloading
+)
+```
+
+### Refresh Trigger
+
+UI components are notified when downloads complete:
+
+```kotlin
+private val _downloadRefreshTrigger = MutableStateFlow(0)
+val downloadRefreshTrigger: StateFlow<Int> = _downloadRefreshTrigger.asStateFlow()
+
+// After successful download and MediaStore scan:
+_downloadRefreshTrigger.value += 1
+```
+
+## Duplicate Detection
+
+Deeztracker intelligently detects already-downloaded tracks to avoid re-downloading:
+
+```kotlin
+suspend fun isTrackDownloaded(trackTitle: String, artistName: String): Boolean {
+    val localTracks = musicRepository.getAllTracks()
+    
+    // Title Normalization: Strip 'feat', lowercase, remove non-alphanumeric
+    fun normalizeTitle(input: String): String {
+        val withoutFeat = input.replace(Regex("(?i)[\\(\\[]?(?:feat\\.|ft\\.|featuring|with).*"), "")
+        return withoutFeat.lowercase().replace(Regex("[^a-z0-9]"), "")
+    }
+
+    // Artist Normalization: Lowercase, remove non-alphanumeric
+    fun normalizeArtist(input: String): String {
+        return input.lowercase().replace(Regex("[^a-z0-9]"), "")
+    }
+    
+    val normalizedTitle = normalizeTitle(trackTitle)
+    val normalizedArtist = normalizeArtist(artistName)
+    
+    return localTracks.any { track ->
+        val localTitle = normalizeTitle(track.title)
+        val localArtist = normalizeArtist(track.artist)
+        
+        // Title: Strict match (after stripping feat)
+        val titleMatch = localTitle == normalizedTitle
+        
+        // Artist: Partial match allowed
+        val artistMatch = localArtist.contains(normalizedArtist) || 
+                         normalizedArtist.contains(localArtist)
+        
+        titleMatch && artistMatch
+    }
+}
+```
+
+### Normalization Strategy
+
+1. **Strip featuring info** - Removes "feat.", "ft.", "featuring", "with" from titles
+2. **Lowercase conversion** - Case-insensitive matching
+3. **Remove special characters** - Only alphanumeric characters remain
+4. **Partial artist matching** - Handles variations like "Artist A" vs "Artist A, Artist B"
+
+<Warning>
+Duplicate detection happens before download to prevent wasting bandwidth and storage.
+</Warning>
+
+## Bulk Download Operations
+
+### Album Downloads
+
+```kotlin
+fun startAlbumDownload(albumId: Long, title: String): Boolean {
+    downloadChannel.trySend(DownloadRequest.Album(albumId, title))
+    return true
+}
+
+private suspend fun processAlbumDownload(request: DownloadRequest.Album) {
+    val albumTracks = deezerRepository.getAlbumTracks(request.id).data
+    var successCount = 0
+    var failedCount = 0
+    var skippedCount = 0
+    
+    for (track in albumTracks) {
+        if (isTrackDownloaded(track.title, track.artist?.name ?: "")) {
+            skippedCount++
+            Log.d(TAG, "Skipping already downloaded track: ${track.title}")
+        } else {
+            try {
+                rustService.downloadTrack(
+                    trackId = track.id.toString(),
+                    outputDir = downloadDirectory,
+                    quality = currentQuality
+                )
+                successCount++
+                scanFileSuspend(result.path)
+                _downloadRefreshTrigger.value += 1
+            } catch (e: Exception) {
+                failedCount++
+            }
+        }
+    }
+    
+    _downloadState.value = DownloadState.Completed(
+        type = DownloadType.ALBUM,
+        title = request.title,
+        successCount = successCount,
+        failedCount = failedCount,
+        skippedCount = skippedCount
+    )
+}
+```
+
+### Playlist Downloads
+
+Playlist downloads work identically to album downloads but fetch tracks from playlist endpoints:
+
+```kotlin
+val playlistTracks = deezerRepository.getPlaylistTracks(playlistId).data
+```
+
+## MediaStore Integration
+
+After downloading, files must be scanned into Android's MediaStore:
+
+```kotlin
+private suspend fun scanFileSuspend(path: String): Uri? = 
+    suspendCancellableCoroutine { cont ->
+        try {
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(path),
+                null  // Auto-detect mime type
+            ) { _, uri ->
+                if (cont.isActive) cont.resume(uri)
+            }
+        } catch (e: Exception) {
+            if (cont.isActive) cont.resume(null)
+        }
+    }
+```
+
+### Track ID Resolution
+
+After scanning, the app retrieves the MediaStore ID with retries:
+
+```kotlin
+var trackId: Long? = null
+for (i in 0..4) {
+    trackId = musicRepository.getTrackIdByPath(result.path)
+    if (trackId != null) break
+    delay(1000)  // Wait for MediaStore indexing
+}
+```
+
+<Info>
+The app retries up to 5 times with 1-second delays to account for MediaStore indexing latency.
+</Info>
+
+## Playlist Integration
+
+When downloading a track for a specific playlist, it's automatically added after download:
+
+```kotlin
+if (request.playlistId != null) {
+    Log.d(TAG, "Adding downloaded track $trackId to playlist ${request.playlistId}")
+    playlistRepository.addTrackToPlaylist(request.playlistId, trackId)
+}
+```
+
+## Error Handling
+
+### Download Failures
+
+```kotlin
+try {
+    val result = rustService.downloadTrack(...)
+    _downloadState.value = DownloadState.Completed(...)
+} catch (e: Exception) {
+    Log.e(TAG, "Download failed: ${request.title}", e)
+    _downloadState.value = DownloadState.Error(
+        title = request.title,
+        message = e.message ?: "Unknown error"
+    )
+}
+```
+
+### Authentication Errors
+
+```kotlin
+val arl = getSavedArl() ?: throw IllegalStateException("Not logged in - ARL not set")
+```
+
+## UI Integration Example
+
+```kotlin
+@Composable
+fun DownloadButton(track: Track) {
+    val downloadManager = remember { DownloadManager.getInstance(context) }
+    val downloadState by downloadManager.downloadState.collectAsState()
+    val downloadRefreshTrigger by downloadManager.downloadRefreshTrigger.collectAsState()
+    
+    var isDownloaded by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(track.id, downloadRefreshTrigger) {
+        isDownloaded = downloadManager.isTrackDownloaded(
+            track.title,
+            track.artist?.name ?: ""
+        )
+    }
+    
+    val isDownloading = downloadState is DownloadState.Downloading &&
+        (downloadState as? DownloadState.Downloading)?.itemId == track.id.toString()
+    
+    IconButton(
+        onClick = { downloadManager.startTrackDownload(track.id, track.title) },
+        enabled = !isDownloading && !isDownloaded
+    ) {
+        when {
+            isDownloaded -> Icon(Icons.Default.Check, tint = Color.Green)
+            isDownloading -> CircularProgressIndicator()
+            else -> Icon(Icons.Default.Download)
+        }
+    }
+}
+```
+
+## Best Practices
+
+### Performance
+
+1. **Sequential downloads** prevent network congestion
+2. **Separate coroutine scope** ensures downloads survive navigation
+3. **Queue size limit** prevents memory issues
+4. **Efficient duplicate detection** uses normalized string matching
+
+### Reliability
+
+1. **MediaStore scanning** ensures files appear in device music apps
+2. **Retry logic** handles MediaStore indexing delays
+3. **Error handling** with detailed error states
+4. **Playlist integration** automatically links downloaded tracks
+
+### User Experience
+
+1. **Real-time state updates** keep UI in sync
+2. **Skip duplicate downloads** saves time and bandwidth
+3. **Bulk download support** for albums and playlists
+4. **Completion statistics** show success, failed, and skipped counts

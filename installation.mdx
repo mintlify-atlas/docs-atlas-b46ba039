@@ -1,0 +1,245 @@
+---
+title: Installation Guide
+description: Step-by-step instructions to install Deeztracker Mobile on your Android device
+---
+
+## Prerequisites
+
+Before installing Deeztracker Mobile, ensure your device meets these requirements:
+
+<CardGroup cols={2}>
+  <Card title="Android Version" icon="android">
+    Android 7.0 (Nougat) or higher
+  </Card>
+  <Card title="Storage Space" icon="hard-drive">
+    At least 50MB for the app, plus space for music files
+  </Card>
+  <Card title="Permissions" icon="shield-check">
+    Storage permission for saving music files
+  </Card>
+  <Card title="Deezer Account" icon="user">
+    Active Deezer account to obtain ARL token
+  </Card>
+</CardGroup>
+
+<Warning>
+  Deeztracker Mobile requires installation from an APK file. You'll need to enable "Install from unknown sources" on your device.
+</Warning>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Download the APK">
+    Download the latest Deeztracker Mobile APK from the official releases page:
+    
+    1. Visit the GitHub releases page
+    2. Download the latest `Deeztracker-X.X.X.apk` file
+    3. The file will be saved to your device's Downloads folder
+    
+    <Note>
+      The APK file is typically named like `Deeztracker-1.1.1.apk` based on the version number.
+    </Note>
+  </Step>
+
+  <Step title="Enable Unknown Sources">
+    Before installing, you need to allow installation from unknown sources:
+    
+    **For Android 8.0 and above:**
+    1. Open **Settings** on your device
+    2. Navigate to **Security & Privacy** (or just **Security**)
+    3. Find **Install unknown apps** or **Unknown sources**
+    4. Select your browser or file manager (e.g., Chrome, Files)
+    5. Toggle **Allow from this source** to ON
+    
+    **For Android 7.0 - 7.1:**
+    1. Open **Settings**
+    2. Navigate to **Security**
+    3. Enable **Unknown sources**
+    4. Confirm the warning message
+    
+    <Warning>
+      Remember to disable this setting after installation for security purposes, or only keep it enabled for trusted apps.
+    </Warning>
+  </Step>
+
+  <Step title="Install the APK">
+    Now you can install Deeztracker Mobile:
+    
+    1. Open your device's **File Manager** or **Downloads** app
+    2. Locate the `Deeztracker-X.X.X.apk` file
+    3. Tap on the APK file
+    4. Review the permissions requested by the app:
+       - **Storage**: Required to save and read music files
+       - **Internet**: Required to download music from Deezer
+    5. Tap **Install**
+    6. Wait for the installation to complete (usually 10-30 seconds)
+    
+    <Note>
+      If you see a "Play Protect" warning, tap **More details** then **Install anyway**. This warning appears because the app is not distributed through the Play Store.
+    </Note>
+  </Step>
+
+  <Step title="Grant Permissions">
+    On first launch, Deeztracker will request necessary permissions:
+    
+    1. **Storage Permission**: Required to save downloaded music
+       - Tap **Allow** when prompted
+       - For Android 11+, select **Allow management of all files**
+    
+    2. **Notification Permission** (Android 13+): Optional but recommended
+       - Allows download progress notifications
+       - Enables playback controls in the notification shade
+    
+    <Info>
+      You can manage these permissions later in Settings → Apps → Deeztracker → Permissions.
+    </Info>
+  </Step>
+
+  <Step title="Launch the App">
+    After installation:
+    
+    1. Tap **Open** from the installation screen, or
+    2. Find the Deeztracker icon in your app drawer
+    3. Tap to launch the application
+    
+    You'll be greeted with the login screen where you can enter your Deezer ARL token.
+  </Step>
+</Steps>
+
+## First Launch Setup
+
+When you first open Deeztracker Mobile, you'll see the login screen. Before you can use the app, you need to:
+
+1. **Obtain your Deezer ARL token** (see [Quick Start guide](/quickstart) for instructions)
+2. Enter the ARL token in the login field
+3. Tap the **Login** button
+
+Once authenticated, you'll have access to all features of Deeztracker Mobile.
+
+<CardGroup cols={2}>
+  <Card title="Next: Get Your ARL Token" icon="key" href="/quickstart#getting-your-deezer-arl-token">
+    Learn how to obtain your Deezer ARL token for authentication
+  </Card>
+  <Card title="Configure Settings" icon="gear" href="/quickstart#configuring-settings">
+    Set your preferred audio quality and download location
+  </Card>
+</CardGroup>
+
+## Troubleshooting Installation Issues
+
+<AccordionGroup>
+  <Accordion title="App Not Installing">
+    **Problem**: The APK file won't install or installation fails.
+    
+    **Solutions**:
+    - Ensure you've enabled "Install from unknown sources" for your file manager/browser
+    - Check that you have enough storage space (at least 50MB free)
+    - Try downloading the APK again - the file may be corrupted
+    - Clear your Downloads folder cache: Settings → Apps → Downloads → Storage → Clear Cache
+    - Restart your device and try again
+  </Accordion>
+  
+  <Accordion title="'App Not Installed' Error">
+    **Problem**: You see "App not installed" or "There was a problem parsing the package."
+    
+    **Solutions**:
+    - **If updating**: Uninstall the previous version first, then install the new APK
+    - **Corrupted download**: Delete the APK and download it again
+    - **Incompatible device**: Verify your Android version is 7.0 or higher (Settings → About Phone → Android version)
+    - **Insufficient storage**: Free up space on your device
+  </Accordion>
+  
+  <Accordion title="Storage Permission Denied">
+    **Problem**: The app crashes or can't download files due to missing storage permission.
+    
+    **Solutions**:
+    - Open Settings → Apps → Deeztracker → Permissions
+    - Enable **Storage** or **Files and Media** permission
+    - For Android 11+, enable **All files access** in Special App Access settings
+    - Restart the app after granting permissions
+  </Accordion>
+  
+  <Accordion title="Play Protect Warning">
+    **Problem**: Google Play Protect blocks the installation.
+    
+    **Solutions**:
+    - Tap **More details** in the warning dialog
+    - Select **Install anyway**
+    - This is normal for apps distributed outside the Play Store
+    - The app is safe and open-source - you can verify the code on GitHub
+  </Accordion>
+  
+  <Accordion title="App Crashes on Launch">
+    **Problem**: Deeztracker closes immediately after opening.
+    
+    **Solutions**:
+    - Clear app data: Settings → Apps → Deeztracker → Storage → Clear Data
+    - Reinstall the app (uninstall, then install the APK again)
+    - Ensure your device has Android 7.0 or higher
+    - Check for device-specific compatibility issues in the GitHub issues page
+  </Accordion>
+</AccordionGroup>
+
+## Updating Deeztracker Mobile
+
+When a new version is released:
+
+<Steps>
+  <Step title="Download New Version">
+    Download the latest APK from the releases page.
+  </Step>
+  
+  <Step title="Install Over Existing App">
+    Tap the new APK file - Android will update the app automatically.
+    
+    <Note>
+      Your login credentials, settings, and downloaded music will be preserved during updates.
+    </Note>
+  </Step>
+  
+  <Step title="If Update Fails">
+    If the update doesn't work:
+    1. Uninstall the old version
+    2. Install the new APK
+    3. Log in again with your ARL token
+    
+    <Warning>
+      Uninstalling will remove app data but NOT your downloaded music files (they remain in your Music/Deeztracker folder).
+    </Warning>
+  </Step>
+</Steps>
+
+## Uninstalling Deeztracker Mobile
+
+To remove the app from your device:
+
+1. Open **Settings** → **Apps**
+2. Find and tap **Deeztracker**
+3. Tap **Uninstall**
+4. Confirm the uninstallation
+
+<Info>
+  Uninstalling removes the app and its settings, but your downloaded music files remain in the `Music/Deeztracker` or `Downloads/Deeztracker` folder. You can manually delete these files if desired.
+</Info>
+
+## System Requirements Summary
+
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| Android Version | 7.0 (API 24) | 10.0+ |
+| RAM | 2GB | 4GB+ |
+| Storage | 50MB (app only) | 1GB+ (with music) |
+| Internet | Required for downloads | Wi-Fi for large downloads |
+| Deezer Account | Free account | Premium account for HD/FLAC |
+
+<Note>
+  The app size is approximately 20-30MB. Downloaded music files will require additional storage depending on quality settings and library size.
+</Note>
+
+## Next Steps
+
+Now that Deeztracker is installed, you're ready to start downloading music!
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Learn how to get your ARL token, search for music, and start downloading
+</Card>

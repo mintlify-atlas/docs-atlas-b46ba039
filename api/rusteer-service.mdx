@@ -1,0 +1,321 @@
+---
+title: RusteerService
+description: Rust-powered Deezer download service interface
+---
+
+The `RusteerService` is a stateless service that provides high-performance music download and search functionality through a Rust FFI (Foreign Function Interface). Each method receives an ARL authentication token as a parameter.
+
+<Note>
+This service is auto-generated from Rust code using UniFFI. It provides direct access to the native Rusteer library for optimal performance.
+</Note>
+
+## Implementation
+
+The service is typically accessed through `RustDeezerService`, which provides a higher-level Kotlin wrapper with session management and coroutine support.
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/rusteer/rusteer.kt:1237`
+
+## Constructor
+
+### RusteerService()
+
+Creates a new instance of the Rusteer service.
+
+```kotlin
+val service = RusteerService()
+```
+
+<Note>
+The service is stateless - you can create multiple instances or reuse a single instance. Authentication is handled per-method via ARL tokens.
+</Note>
+
+## Methods
+
+### verifyArl()
+
+Verifies if an ARL token is valid for authentication with Deezer.
+
+<ParamField path="arl" type="String" required>
+  The Deezer ARL (Authentication Refresh Login) token to validate
+</ParamField>
+
+<ResponseField name="return" type="Boolean">
+  `true` if the ARL token is valid, `false` otherwise
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val service = RusteerService()
+val isValid = service.verifyArl("your-arl-token-here")
+
+if (isValid) {
+    println("ARL token is valid")
+} else {
+    println("Invalid ARL token")
+}
+```
+
+<Warning>
+This is a blocking call that internally uses the Tokio runtime. Call from a background thread or use Kotlin coroutines with `Dispatchers.IO`.
+</Warning>
+
+---
+
+### searchTracks()
+
+Search for tracks on Deezer.
+
+<ParamField path="arl" type="String" required>
+  Valid ARL authentication token
+</ParamField>
+
+<ParamField path="query" type="String" required>
+  Search query (e.g., "Artist - Title" or "Album Name")
+</ParamField>
+
+<ResponseField name="return" type="List<Track>">
+  List of matching tracks. Returns empty list if no results found.
+</ResponseField>
+
+**Track Data Structure:**
+
+```kotlin
+data class Track(
+    val id: String,           // Deezer track ID
+    val title: String,        // Track title
+    val artist: String,       // Artist name
+    val album: String,        // Album name
+    val coverUrl: String?     // Album cover image URL (nullable)
+)
+```
+
+**Example:**
+
+```kotlin
+val service = RusteerService()
+val arl = "your-arl-token"
+
+val results = service.searchTracks(arl, "Daft Punk - Get Lucky")
+results.forEach { track ->
+    println("${track.title} by ${track.artist} (ID: ${track.id})")
+}
+```
+
+---
+
+### downloadTrack()
+
+Download a single track from Deezer.
+
+<ParamField path="arl" type="String" required>
+  Valid ARL authentication token
+</ParamField>
+
+<ParamField path="trackId" type="String" required>
+  The Deezer track ID to download
+</ParamField>
+
+<ParamField path="outputDir" type="String" required>
+  Directory path where the track will be saved
+</ParamField>
+
+<ParamField path="quality" type="DownloadQuality" required>
+  Download quality enum: `FLAC`, `MP3_320`, or `MP3_128`
+</ParamField>
+
+<ResponseField name="return" type="DownloadResult">
+  Result object containing download information
+</ResponseField>
+
+**DownloadResult Structure:**
+
+```kotlin
+data class DownloadResult(
+    val path: String,          // Full path to downloaded file
+    val quality: DownloadQuality, // Actual quality downloaded
+    val size: ULong,           // File size in bytes
+    val title: String,         // Track title
+    val artist: String         // Artist name
+)
+```
+
+**DownloadQuality Enum:**
+
+```kotlin
+enum class DownloadQuality {
+    FLAC,      // Lossless quality
+    MP3_320,   // 320kbps MP3
+    MP3_128    // 128kbps MP3
+}
+```
+
+**Example:**
+
+```kotlin
+val service = RusteerService()
+val arl = "your-arl-token"
+
+val result = service.downloadTrack(
+    arl = arl,
+    trackId = "3135556",
+    outputDir = "/storage/emulated/0/Music/Deeztracker",
+    quality = DownloadQuality.MP3_320
+)
+
+println("Downloaded: ${result.title} by ${result.artist}")
+println("Path: ${result.path}")
+println("Size: ${result.size} bytes")
+```
+
+<Warning>
+This is a blocking operation that can take several seconds. Always call from a background thread.
+</Warning>
+
+---
+
+### downloadAlbum()
+
+Download all tracks from a Deezer album.
+
+<ParamField path="arl" type="String" required>
+  Valid ARL authentication token
+</ParamField>
+
+<ParamField path="albumId" type="String" required>
+  The Deezer album ID to download
+</ParamField>
+
+<ParamField path="outputDir" type="String" required>
+  Directory path where album tracks will be saved
+</ParamField>
+
+<ParamField path="quality" type="DownloadQuality" required>
+  Download quality enum: `FLAC`, `MP3_320`, or `MP3_128`
+</ParamField>
+
+<ResponseField name="return" type="BatchDownloadResult">
+  Batch result containing successful downloads and failures
+</ResponseField>
+
+**BatchDownloadResult Structure:**
+
+```kotlin
+data class BatchDownloadResult(
+    val directory: String,              // Output directory path
+    val successful: List<DownloadResult>, // Successfully downloaded tracks
+    val failed: List<FailedDownload>      // Failed downloads with errors
+)
+
+data class FailedDownload(
+    val title: String,  // Track title that failed
+    val error: String   // Error message
+)
+```
+
+**Example:**
+
+```kotlin
+val service = RusteerService()
+val arl = "your-arl-token"
+
+val result = service.downloadAlbum(
+    arl = arl,
+    albumId = "302127",
+    outputDir = "/storage/emulated/0/Music/Deeztracker",
+    quality = DownloadQuality.FLAC
+)
+
+println("Album download complete:")
+println("  Successful: ${result.successful.size}")
+println("  Failed: ${result.failed.size}")
+
+result.failed.forEach { failure ->
+    println("  Failed: ${failure.title} - ${failure.error}")
+}
+```
+
+---
+
+### downloadPlaylist()
+
+Download all tracks from a Deezer playlist.
+
+<ParamField path="arl" type="String" required>
+  Valid ARL authentication token
+</ParamField>
+
+<ParamField path="playlistId" type="String" required>
+  The Deezer playlist ID to download
+</ParamField>
+
+<ParamField path="outputDir" type="String" required>
+  Directory path where playlist tracks will be saved
+</ParamField>
+
+<ParamField path="quality" type="DownloadQuality" required>
+  Download quality enum: `FLAC`, `MP3_320`, or `MP3_128`
+</ParamField>
+
+<ResponseField name="return" type="BatchDownloadResult">
+  Batch result containing successful downloads and failures
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val service = RusteerService()
+val arl = "your-arl-token"
+
+val result = service.downloadPlaylist(
+    arl = arl,
+    playlistId = "1234567890",
+    outputDir = "/storage/emulated/0/Music/Deeztracker",
+    quality = DownloadQuality.MP3_320
+)
+
+println("Downloaded ${result.successful.size} tracks to ${result.directory}")
+```
+
+## Error Handling
+
+All download methods can throw exceptions. Wrap calls in try-catch blocks:
+
+```kotlin
+try {
+    val result = service.downloadTrack(arl, trackId, outputDir, quality)
+    // Handle success
+} catch (e: Exception) {
+    // Handle error
+    Log.e(TAG, "Download failed", e)
+}
+```
+
+## Memory Management
+
+The service implements `Disposable` and `AutoCloseable`. While the cleaner will automatically free resources, you can manually clean up:
+
+```kotlin
+val service = RusteerService()
+try {
+    // Use service
+} finally {
+    service.destroy()
+}
+
+// Or use with Kotlin's use function
+RusteerService().use { service ->
+    service.downloadTrack(...)
+}
+```
+
+## Thread Safety
+
+<Note>
+The service is thread-safe and can be called from multiple coroutines or threads simultaneously. However, each method call is blocking and should be executed on a background thread.
+</Note>
+
+## See Also
+
+- [DownloadManager](/api/download-manager) - High-level manager with queue and state management
+- [PlayerController](/api/player-controller) - Playback control for downloaded tracks

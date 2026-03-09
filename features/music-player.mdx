@@ -1,0 +1,543 @@
+---
+title: Music Player
+description: Full-featured music player with queue management, shuffle, repeat modes, and Media3 ExoPlayer integration
+icon: play
+---
+
+## Overview
+
+Deeztracker Mobile features a professional-grade music player built on Android's Media3 ExoPlayer library. The player uses a service-based architecture for background playback, supporting shuffle, repeat modes, favorites, and synchronized lyrics.
+
+## Player Architecture
+
+### PlayerController Singleton
+
+The `PlayerController` manages all playback operations and maintains player state:
+
+```kotlin
+class PlayerController(private val context: Context) {
+    companion object {
+        @Volatile
+        private var INSTANCE: PlayerController? = null
+        
+        fun getInstance(context: Context): PlayerController {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: PlayerController(context.applicationContext).also { INSTANCE = it }
+            }
+        }
+    }
+    
+    val playlistRepository = LocalPlaylistRepository(context)
+    private val lyricsRepository = LyricsRepository(context)
+    
+    private val _playerState = MutableStateFlow(PlayerState())
+    val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
+    
+    private var mediaController: MediaController? = null
+}
+```
+
+<Info>
+The singleton pattern ensures a single player instance survives navigation and configuration changes.
+</Info>
+
+## Media3 ExoPlayer Integration
+
+Deeztracker uses Media3's `MediaController` and `MusicService` for robust background playback:
+
+### Service Connection
+
+```kotlin
+private fun initializeController() {
+    val sessionToken = SessionToken(
+        context,
+        ComponentName(context, MusicService::class.java)
+    )
+    controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
+    
+    controllerFuture?.addListener({
+        mediaController = controllerFuture?.get()
+        mediaController?.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updateState()
+                if (isPlaying) startPositionUpdates()
+                else stopPositionUpdates()
+            }
+            
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                updateState()
+                syncCurrentTrack(mediaItem)
+            }
+            
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                updateState()
+            }
+        })
+        updateState()
+    }, MoreExecutors.directExecutor())
+}
+```
+
+### MediaItem Construction
+
+Tracks are converted to Media3 `MediaItem` objects with complete metadata:
+
+```kotlin
+val mediaItems = playlist.map { localTrack ->
+    val albumArt = localTrack.albumArtUri?.trim()
+    val artworkUri = if (!albumArt.isNullOrEmpty()) {
+        Uri.parse(albumArt)
+    } else {
+        Uri.parse("android.resource://${context.packageName}/${R.drawable.ic_app_icon}")
+    }
+    
+    MediaItem.Builder()
+        .setUri(Uri.fromFile(File(localTrack.filePath)))
+        .setMediaId(localTrack.id.toString())
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(localTrack.title)
+                .setArtist(localTrack.artist)
+                .setAlbumTitle(localTrack.album)
+                .setArtworkUri(artworkUri)
+                .build()
+        )
+        .build()
+}
+```
+
+<Tip>
+Media metadata is used for system notifications and lock screen controls.
+</Tip>
+
+## Player State Management
+
+Player state is exposed through a comprehensive data class:
+
+```kotlin
+data class PlayerState(
+    val currentTrack: LocalTrack? = null,
+    val isPlaying: Boolean = false,
+    val duration: Long = 0L,
+    val currentPosition: Long = 0L,
+    val isShuffleEnabled: Boolean = false,
+    val repeatMode: RepeatMode = RepeatMode.OFF,
+    val volume: Float = 1.0f,
+    val isCurrentTrackFavorite: Boolean = false,
+    val playingSource: String = "Local Music",
+    val lyrics: List<LrcLine> = emptyList(),
+    val currentLyricIndex: Int = -1,
+    val isLoadingLyrics: Boolean = false
+)
+```
+
+### State Updates
+
+State is updated from the Media3 player:
+
+```kotlin
+private fun updateState() {
+    val player = mediaController ?: return
+    
+    val appRepeatMode = when (player.repeatMode) {
+        Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+        Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+        else -> RepeatMode.OFF
+    }
+    
+    val currentPos = player.currentPosition
+    val lyrics = _playerState.value.lyrics
+    val lyricIndex = LrcParser.getActiveLineIndex(lyrics, currentPos)
+    
+    _playerState.update { 
+        it.copy(
+            isPlaying = player.isPlaying,
+            duration = player.duration.coerceAtLeast(0L),
+            currentPosition = currentPos,
+            isShuffleEnabled = player.shuffleModeEnabled,
+            repeatMode = appRepeatMode,
+            volume = player.volume,
+            currentLyricIndex = lyricIndex
+        )
+    }
+}
+```
+
+## Playback Controls
+
+### Basic Controls
+
+```kotlin
+fun togglePlayPause() {
+    val player = mediaController ?: return
+    if (player.isPlaying) {
+        player.pause()
+    } else {
+        player.play()
+    }
+}
+
+fun next() {
+    mediaController?.seekToNext()
+}
+
+fun previous() {
+    mediaController?.seekToPrevious()
+}
+
+fun seekTo(position: Long) {
+    mediaController?.seekTo(position)
+}
+```
+
+### Play Track with Queue
+
+The `playTrack` function sets up the entire queue:
+
+```kotlin
+fun playTrack(track: LocalTrack, playlist: List<LocalTrack>, source: String? = null) {
+    val resolvedSource = source ?: context.getString(R.string.local_music_title)
+    val player = mediaController ?: return
+    
+    currentPlaylist = playlist
+    val startIndex = playlist.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+    
+    val mediaItems = playlist.map { localTrack -> /* convert to MediaItem */ }
+    
+    player.setMediaItems(mediaItems, startIndex, 0L)
+    player.prepare()
+    player.play()
+    
+    fetchLyrics(track)
+    _playerState.update { 
+        it.copy(
+            currentTrack = track,
+            isPlaying = true,
+            playingSource = resolvedSource
+        )
+    }
+}
+```
+
+<Note>
+The entire playlist is loaded into the queue, allowing seamless navigation between tracks.
+</Note>
+
+## Shuffle and Repeat Modes
+
+### Shuffle
+
+Shuffle is managed by Media3's built-in shuffle mode:
+
+```kotlin
+fun setShuffle(enabled: Boolean) {
+    mediaController?.shuffleModeEnabled = enabled
+    updateState()
+}
+```
+
+### Repeat Modes
+
+Repeat mode cycles through three states:
+
+```kotlin
+enum class RepeatMode {
+    OFF,   // Play through queue once
+    ALL,   // Loop entire queue
+    ONE    // Repeat current track
+}
+
+fun toggleRepeatMode() {
+    val player = mediaController ?: return
+    val newMode = when (player.repeatMode) {
+        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+        Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
+        else -> Player.REPEAT_MODE_OFF
+    }
+    player.repeatMode = newMode
+    updateState()
+}
+```
+
+## Queue Management
+
+### Current Queue
+
+The current playlist is stored in memory:
+
+```kotlin
+private var currentPlaylist: List<LocalTrack> = emptyList()
+```
+
+### Track Synchronization
+
+When the media item changes, the current track is synced from the playlist:
+
+```kotlin
+private fun syncCurrentTrack(targetMediaItem: MediaItem? = null) {
+    val player = mediaController ?: return
+    val itemToSync = targetMediaItem ?: player.currentMediaItem ?: return
+    val mediaId = itemToSync.mediaId.toLongOrNull() ?: return
+    
+    val track = currentPlaylist.find { it.id == mediaId }
+    
+    if (track != null) {
+        if (_playerState.value.currentTrack?.id != track.id || 
+            _playerState.value.lyrics.isEmpty()) {
+            _playerState.update { it.copy(currentTrack = track) }
+            checkFavoriteStatus()
+            fetchLyrics(track)
+        }
+    }
+}
+```
+
+## Music Player UI
+
+The `MusicPlayerScreen` provides a full-screen player interface:
+
+### Screen Layout
+
+```kotlin
+@Composable
+fun MusicPlayerScreen(
+    onCollapse: () -> Unit,
+    playerController: PlayerController
+) {
+    val playerState by playerController.playerState.collectAsState()
+    val track = playerState.currentTrack ?: return
+    
+    // Horizontal pager for player and lyrics
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    
+    HorizontalPager(state = pagerState) { page ->
+        if (page == 0) {
+            // Player Page
+            PlayerPageContent(playerState, playerController)
+        } else {
+            // Lyrics Page
+            LyricsPageContent(playerState, playerController)
+        }
+    }
+}
+```
+
+### Album Artwork
+
+```kotlin
+Box(
+    modifier = Modifier
+        .fillMaxWidth(0.75f)
+        .aspectRatio(1f)
+        .shadow(24.dp, RoundedCornerShape(20.dp))
+        .clip(RoundedCornerShape(20.dp))
+        .background(Color.DarkGray)
+) {
+    TrackArtwork(
+        model = track.albumArtUri,
+        modifier = Modifier.fillMaxSize()
+    )
+}
+```
+
+### Progress Slider
+
+```kotlin
+Slider(
+    value = if (playerState.duration > 0)
+        playerState.currentPosition.toFloat() / playerState.duration
+    else 0f,
+    onValueChange = { 
+        playerController.seekTo((it * playerState.duration).toLong())
+    },
+    colors = SliderDefaults.colors(
+        thumbColor = Color.White,
+        activeTrackColor = Primary,
+        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+    )
+)
+
+Row(horizontalArrangement = Arrangement.SpaceBetween) {
+    Text(text = formatTime(playerState.currentPosition))
+    Text(text = formatTime(playerState.duration))
+}
+```
+
+### Control Buttons
+
+```kotlin
+Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceEvenly,
+    verticalAlignment = Alignment.CenterVertically
+) {
+    // Shuffle
+    IconButton(onClick = { playerController.setShuffle(!playerState.isShuffleEnabled) }) {
+        Icon(
+            Icons.Default.Shuffle,
+            tint = if (playerState.isShuffleEnabled) Primary else TextGray
+        )
+    }
+    
+    // Previous
+    IconButton(onClick = { playerController.previous() }) {
+        Icon(Icons.Default.SkipPrevious, tint = Color.White)
+    }
+    
+    // Play/Pause
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .clip(CircleShape)
+            .background(Brush.linearGradient(listOf(Primary, Color(0xFF0066CC))))
+            .clickable { playerController.togglePlayPause() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            tint = Color.White
+        )
+    }
+    
+    // Next
+    IconButton(onClick = { playerController.next() }) {
+        Icon(Icons.Default.SkipNext, tint = Color.White)
+    }
+    
+    // Repeat
+    IconButton(onClick = { playerController.toggleRepeatMode() }) {
+        val (icon, tint) = when (playerState.repeatMode) {
+            RepeatMode.ONE -> Icons.Default.RepeatOne to Primary
+            RepeatMode.ALL -> Icons.Default.Repeat to Primary
+            else -> Icons.Default.Repeat to TextGray
+        }
+        Icon(icon, tint = tint)
+    }
+}
+```
+
+## Position Updates
+
+Position is updated every 100ms while playing:
+
+```kotlin
+private fun startPositionUpdates() {
+    stopPositionUpdates()
+    positionUpdateJob = GlobalScope.launch(Dispatchers.Main) {
+        try {
+            while (true) {
+                updateState()
+                delay(100)
+            }
+        } catch (e: CancellationException) {
+            // Job was cancelled, exit gracefully
+        }
+    }
+}
+
+private fun stopPositionUpdates() {
+    positionUpdateJob?.cancel()
+    positionUpdateJob = null
+}
+```
+
+<Warning>
+Position updates are started only when playing to conserve battery.
+</Warning>
+
+## Favorites Integration
+
+Tracks can be marked as favorites from the player:
+
+```kotlin
+fun toggleFavorite() {
+    val track = _playerState.value.currentTrack ?: return
+    GlobalScope.launch {
+        playlistRepository.toggleFavorite(track.id)
+        val isFav = playlistRepository.isFavorite(track.id)
+        _playerState.update { it.copy(isCurrentTrackFavorite = isFav) }
+    }
+}
+
+private fun checkFavoriteStatus() {
+    val track = _playerState.value.currentTrack ?: return
+    GlobalScope.launch {
+        val isFav = playlistRepository.isFavorite(track.id)
+        _playerState.update { it.copy(isCurrentTrackFavorite = isFav) }
+    }
+}
+```
+
+### Favorite Button UI
+
+```kotlin
+IconButton(onClick = { playerController.toggleFavorite() }) {
+    Icon(
+        if (playerState.isCurrentTrackFavorite)
+            Icons.Default.Favorite
+        else
+            Icons.Default.FavoriteBorder,
+        tint = Primary
+    )
+}
+```
+
+## Volume Control
+
+Volume is controlled via custom session commands:
+
+```kotlin
+fun setVolume(volume: Float) {
+    val player = mediaController ?: return
+    val command = SessionCommand(MusicService.CMD_SET_VOLUME, Bundle.EMPTY)
+    val args = Bundle().apply {
+        putFloat(MusicService.KEY_VOLUME, volume)
+    }
+    player.sendCustomCommand(command, args)
+    _playerState.update { it.copy(volume = volume) }
+}
+```
+
+## Background Playback
+
+The `MusicService` extends `MediaSessionService` for background playback:
+
+- **Foreground service** keeps playback alive
+- **Media notifications** show on lock screen
+- **System controls** integrate with hardware buttons
+- **Audio focus** handles interruptions (calls, alarms)
+
+## Stop and Release
+
+When logging out or exiting:
+
+```kotlin
+fun stop() {
+    val player = mediaController ?: return
+    player.stop()
+    player.clearMediaItems()
+    player.release()
+    mediaController = null
+    controllerFuture = null
+    stopPositionUpdates()
+    _playerState.update { PlayerState() }
+}
+```
+
+## Best Practices
+
+### Performance
+
+1. **Position updates only when playing** reduces CPU usage
+2. **StateFlow for state management** provides efficient UI updates
+3. **Media3 ExoPlayer** is optimized for battery and performance
+4. **Singleton architecture** prevents duplicate player instances
+
+### User Experience
+
+1. **Smooth transitions** between tracks
+2. **State restoration** survives configuration changes
+3. **Background playback** continues when app is backgrounded
+4. **System integration** with lock screen and notifications
+5. **Seamless queue management** for continuous listening
