@@ -1,0 +1,107 @@
+{
+  "projectType": "frontend",
+  "projectName": "Deeztracker Mobile",
+  "projectDescription": "A modern Android music player for downloading and enjoying high-quality music offline with synchronized lyrics",
+  "theme": "almond",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/search-discovery",
+              "features/download-management",
+              "features/music-player",
+              "features/lyrics",
+              "features/playlists",
+              "features/local-library"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "guide/authentication",
+              "guide/downloading-music",
+              "guide/playing-music",
+              "guide/managing-playlists",
+              "guide/settings"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/building",
+              "development/architecture",
+              "development/project-structure"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Services",
+            "pages": [
+              "api/rusteer-service",
+              "api/download-manager",
+              "api/player-controller"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "api/models/track",
+              "api/models/album",
+              "api/models/playlist"
+            ]
+          },
+          {
+            "group": "UI Components",
+            "pages": [
+              "api/components/music-player",
+              "api/components/track-list",
+              "api/components/dialogs"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Search and download tracks, albums, and playlists from Deezer",
+    "Multiple audio quality options (MP3 128kbps, MP3 320kbps, FLAC)",
+    "Full-featured offline music player with Media3 (ExoPlayer)",
+    "Synchronized lyrics display with real-time scrolling",
+    "Local music library management with albums and artists",
+    "Custom playlist creation and management",
+    "Material 3 UI with Jetpack Compose",
+    "Rust-powered download engine via UniFFI"
+  ],
+  "publicApiSurface": [
+    "RusteerService.downloadTrack()",
+    "RusteerService.downloadAlbum()",
+    "RusteerService.downloadPlaylist()",
+    "RusteerService.searchTracks()",
+    "RusteerService.verifyArl()",
+    "DownloadManager",
+    "PlayerController",
+    "LocalMusicRepository",
+    "LyricsRepository",
+    "DeezerApiService",
+    "MainActivity"
+  ]
+}
