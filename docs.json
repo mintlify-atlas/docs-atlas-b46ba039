@@ -75,7 +75,10 @@
             "pages": [
               "api/rusteer-service",
               "api/download-manager",
-              "api/player-controller"
+              "api/player-controller",
+              "api/deezer-api-service",
+              "api/local-music-repository",
+              "api/lyrics-repository"
             ]
           },
           {

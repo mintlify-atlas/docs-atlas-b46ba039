@@ -1,0 +1,296 @@
+---
+title: DeezerApiService
+description: Retrofit interface for Deezer public API integration
+---
+
+The `DeezerApiService` is a Retrofit interface that provides access to the Deezer public API for searching and retrieving music metadata.
+
+<Note>
+This service uses the public Deezer API (api.deezer.com) and does not require authentication for basic operations like search and metadata retrieval.
+</Note>
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/deezer/DeezerApiService.kt`
+
+## Search Methods
+
+### searchTracks()
+
+Search for tracks by query string.
+
+<ParamField path="query" type="String" required>
+  Search query string
+</ParamField>
+
+<ParamField path="index" type="Int?" default="null">
+  Pagination offset (default: 0)
+</ParamField>
+
+<ParamField path="limit" type="Int?" default="null">
+  Number of results to return (default: 25)
+</ParamField>
+
+<ResponseField name="return" type="TrackSearchResponse">
+  Search response containing list of tracks and pagination info
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val apiService: DeezerApiService = // ... Retrofit instance
+val results = apiService.searchTracks(
+    query = "Queen Bohemian Rhapsody",
+    index = 0,
+    limit = 25
+)
+```
+
+### searchAlbums()
+
+Search for albums by query string.
+
+<ParamField path="query" type="String" required>
+  Search query string
+</ParamField>
+
+<ParamField path="index" type="Int?" default="null">
+  Pagination offset
+</ParamField>
+
+<ParamField path="limit" type="Int?" default="null">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="return" type="AlbumSearchResponse">
+  Search response containing list of albums
+</ResponseField>
+
+### searchArtists()
+
+Search for artists by query string.
+
+<ParamField path="query" type="String" required>
+  Search query string
+</ParamField>
+
+<ParamField path="index" type="Int?" default="null">
+  Pagination offset
+</ParamField>
+
+<ParamField path="limit" type="Int?" default="null">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="return" type="ArtistSearchResponse">
+  Search response containing list of artists
+</ResponseField>
+
+### searchPlaylists()
+
+Search for playlists by query string.
+
+<ParamField path="query" type="String" required>
+  Search query string
+</ParamField>
+
+<ParamField path="index" type="Int?" default="null">
+  Pagination offset
+</ParamField>
+
+<ParamField path="limit" type="Int?" default="null">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="return" type="PlaylistSearchResponse">
+  Search response containing list of playlists
+</ResponseField>
+
+## Artist Methods
+
+### getArtist()
+
+Get detailed information about a specific artist.
+
+<ParamField path="id" type="Long" required>
+  Deezer artist ID
+</ParamField>
+
+<ResponseField name="return" type="Artist">
+  Artist details including name, picture, and fan count
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val artist = apiService.getArtist(id = 27L) // Queen
+```
+
+### getArtistAlbums()
+
+Get albums by a specific artist.
+
+<ParamField path="id" type="Long" required>
+  Deezer artist ID
+</ParamField>
+
+<ParamField path="index" type="Int?" default="null">
+  Pagination offset
+</ParamField>
+
+<ParamField path="limit" type="Int?" default="null">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="return" type="AlbumSearchResponse">
+  List of albums by the artist
+</ResponseField>
+
+### getArtistTopTracks()
+
+Get the top tracks for an artist.
+
+<ParamField path="id" type="Long" required>
+  Deezer artist ID
+</ParamField>
+
+<ParamField path="limit" type="Int?" default="10">
+  Number of top tracks to return
+</ParamField>
+
+<ResponseField name="return" type="TrackListResponse">
+  List of the artist's most popular tracks
+</ResponseField>
+
+## Album Methods
+
+### getAlbum()
+
+Get detailed information about a specific album.
+
+<ParamField path="id" type="Long" required>
+  Deezer album ID
+</ParamField>
+
+<ResponseField name="return" type="Album">
+  Album details including title, artist, release date, and cover art
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val album = apiService.getAlbum(id = 302127L) // A Night at the Opera
+```
+
+### getAlbumTracks()
+
+Get all tracks in an album.
+
+<ParamField path="id" type="Long" required>
+  Deezer album ID
+</ParamField>
+
+<ParamField path="index" type="Int?" default="null">
+  Pagination offset
+</ParamField>
+
+<ParamField path="limit" type="Int?" default="null">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="return" type="TrackListResponse">
+  List of tracks in the album
+</ResponseField>
+
+## Playlist Methods
+
+### getPlaylist()
+
+Get detailed information about a specific playlist.
+
+<ParamField path="id" type="Long" required>
+  Deezer playlist ID
+</ParamField>
+
+<ResponseField name="return" type="Playlist">
+  Playlist details including title, creator, and track count
+</ResponseField>
+
+### getPlaylistTracks()
+
+Get all tracks in a playlist.
+
+<ParamField path="id" type="Long" required>
+  Deezer playlist ID
+</ParamField>
+
+<ParamField path="index" type="Int?" default="null">
+  Pagination offset
+</ParamField>
+
+<ParamField path="limit" type="Int?" default="null">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="return" type="TrackListResponse">
+  List of tracks in the playlist
+</ResponseField>
+
+## Pagination Methods
+
+For advanced use cases, the service provides URL-based pagination methods:
+
+- `searchTracksByUrl(@Url url: String)` - Load next/previous page of track search results
+- `searchAlbumsByUrl(@Url url: String)` - Load next/previous page of album search results
+- `searchArtistsByUrl(@Url url: String)` - Load next/previous page of artist search results
+- `searchPlaylistsByUrl(@Url url: String)` - Load next/previous page of playlist search results
+- `getAlbumTracksByUrl(@Url url: String)` - Load next/previous page of album tracks
+- `getArtistAlbumsByUrl(@Url url: String)` - Load next/previous page of artist albums
+- `getPlaylistTracksByUrl(@Url url: String)` - Load next/previous page of playlist tracks
+
+These methods accept the `next` URL from pagination responses.
+
+## Implementation
+
+The service is typically accessed through `DeezerRepository`, which provides:
+
+```kotlin features/deezer/DeezerRepository.kt
+class DeezerRepository {
+    private val apiService: DeezerApiService = RetrofitClient.deezerApiService
+    
+    suspend fun searchTracks(query: String, index: Int = 0): TrackSearchResponse {
+        return apiService.searchTracks(query, index, 25)
+    }
+    
+    // ... other methods
+}
+```
+
+## Response Types
+
+All search responses include pagination information:
+
+<ResponseField name="data" type="List<T>">
+  List of results (tracks, albums, artists, or playlists)
+</ResponseField>
+
+<ResponseField name="total" type="Int">
+  Total number of results available
+</ResponseField>
+
+<ResponseField name="next" type="String?">
+  URL for the next page of results (null if last page)
+</ResponseField>
+
+<ResponseField name="prev" type="String?">
+  URL for the previous page of results (null if first page)
+</ResponseField>
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Data Models" icon="database" href="/api/models/track">
+    Track, Album, and Playlist data structures
+  </Card>
+  <Card title="Search & Discovery" icon="magnifying-glass" href="/features/search-discovery">
+    How search is implemented in the app
+  </Card>
+</CardGroup>

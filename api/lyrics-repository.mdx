@@ -1,0 +1,251 @@
+---
+title: LyricsRepository
+description: Repository for fetching and caching synchronized lyrics from LrcLib
+---
+
+The `LyricsRepository` handles fetching synchronized lyrics from the LrcLib API with automatic caching and retry logic with exponential backoff.
+
+<Note>
+Lyrics are cached locally to minimize API calls and provide offline access to previously fetched lyrics.
+</Note>
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/lyrics/LyricsRepository.kt`
+
+## Constructor
+
+```kotlin
+class LyricsRepository(private val context: Context)
+```
+
+<ParamField path="context" type="Context" required>
+  Android Context for accessing cache directory
+</ParamField>
+
+The repository initializes a Retrofit client with:
+- Base URL: `https://lrclib.net/`
+- 15-second connection timeout
+- 30-second read/write timeouts
+- Gson converter for JSON parsing
+
+## Primary Method
+
+### getLyrics()
+
+Fetch synchronized lyrics for a track, with automatic caching.
+
+<ParamField path="track" type="LocalTrack" required>
+  The track to fetch lyrics for (requires title, artist, album, and duration)
+</ParamField>
+
+<ResponseField name="return" type="String?">
+  LRC-formatted lyrics string, or null if not found
+</ResponseField>
+
+**Fetching Strategy:**
+
+The method uses a multi-strategy approach with caching:
+
+1. **Cache Check**: Returns cached lyrics if available
+2. **Exact Match**: Search by track name, artist, and album
+3. **Fallback**: Search by track name and artist only
+4. **Duration Filter**: Filters results by track duration (±2 seconds tolerance)
+5. **Cache**: Saves successful results to cache
+
+**Example:**
+
+```kotlin
+val repository = LyricsRepository(context)
+val track = LocalTrack(
+    id = 123L,
+    title = "Bohemian Rhapsody",
+    artist = "Queen",
+    album = "A Night at the Opera",
+    duration = 354000L // 5:54 in milliseconds
+)
+
+val lyrics = repository.getLyrics(track)
+if (lyrics != null) {
+    // Parse and display LRC lyrics
+    val lrcParser = LrcParser()
+    val lyricLines = lrcParser.parseLrc(lyrics)
+}
+```
+
+## Retry Logic
+
+The repository implements exponential backoff for API requests:
+
+<ResponseField name="maxRetries" type="Int" default="3">
+  Maximum number of retry attempts
+</ResponseField>
+
+<ResponseField name="initialBackoff" type="Long" default="500ms">
+  Initial delay before first retry (doubles for each subsequent retry)
+</ResponseField>
+
+**Retry Sequence:**
+1. Initial attempt
+2. Retry after 500ms (if failed)
+3. Retry after 1000ms (if failed)
+4. Retry after 2000ms (if failed)
+5. Return null (after 3 failures)
+
+## Caching System
+
+### Cache Location
+
+Lyrics are cached in the app's internal cache directory:
+
+```
+/data/data/com.crowstar.deeztrackermobile/cache/lyrics/
+```
+
+### Cache File Naming
+
+Cache files are named using normalized track information:
+
+```kotlin
+private fun getCacheFile(track: LocalTrack): File {
+    val cacheDir = File(context.cacheDir, "lyrics")
+    if (!cacheDir.exists()) cacheDir.mkdirs()
+    
+    val fileName = "${track.title.normalize()}_${track.artist.normalize()}.lrc"
+    return File(cacheDir, fileName)
+}
+```
+
+Where `normalize()` replaces special characters and spaces with underscores.
+
+### Cache Behavior
+
+- **Hit**: Returns cached lyrics immediately
+- **Miss**: Fetches from API and caches result
+- **Invalid**: Deletes and refetches if cache contains "NOT_FOUND" or is blank
+
+## API Integration
+
+The repository uses the LrcLib API endpoints:
+
+### Search by Track, Artist, and Album
+
+```kotlin
+GET /api/search?track_name={title}&artist_name={artist}&album_name={album}
+```
+
+### Search by Track and Artist Only
+
+```kotlin
+GET /api/search?track_name={title}&artist_name={artist}
+```
+
+### Get by Exact Match
+
+```kotlin
+GET /api/get?track_name={title}&artist_name={artist}&album_name={album}&duration={seconds}
+```
+
+## Duration Matching
+
+The repository filters lyrics by duration with a ±2 second tolerance:
+
+```kotlin
+val targetDuration = track.duration / 1000 // Convert to seconds
+val results = apiResults.filter { result ->
+    val diff = kotlin.math.abs(result.duration - targetDuration)
+    diff <= 2 // Within 2 seconds
+}
+```
+
+This ensures the correct version of a track is matched when multiple versions exist.
+
+## Error Handling
+
+<Warning>
+All API calls are wrapped in retry logic. Network failures, timeouts, and API errors trigger exponential backoff retries.
+</Warning>
+
+**Error Scenarios:**
+
+- **Network Failure**: Retries with exponential backoff
+- **API Timeout**: Retries up to 3 times
+- **No Results**: Returns null (not cached)
+- **Invalid Response**: Retries or returns null
+- **Cache Read Error**: Deletes invalid cache and refetches
+
+## Response Format
+
+Lyrics are returned in LRC format with timestamps:
+
+```
+[00:00.00] Lyrics line 1
+[00:05.50] Lyrics line 2
+[00:12.30] Lyrics line 3
+```
+
+These are parsed by `LrcParser` for synchronized display:
+
+```kotlin features/lyrics/LrcParser.kt
+data class LyricLine(
+    val timestamp: Long, // Milliseconds
+    val text: String
+)
+
+class LrcParser {
+    fun parseLrc(lrcContent: String): List<LyricLine>
+}
+```
+
+## Usage in Player
+
+The lyrics are displayed with real-time synchronization in the music player:
+
+```kotlin features/player/PlayerController.kt
+class PlayerController {
+    private val lyricsRepository = LyricsRepository(context)
+    
+    suspend fun loadLyrics(track: LocalTrack) {
+        val lrcContent = lyricsRepository.getLyrics(track)
+        if (lrcContent != null) {
+            val lines = LrcParser().parseLrc(lrcContent)
+            // Update UI with synchronized lyrics
+        }
+    }
+}
+```
+
+## Performance Considerations
+
+<Tip>
+Lyrics are fetched asynchronously and cached indefinitely. For best performance:
+- Fetch lyrics on background threads
+- Check cache before making API calls
+- Use the duration filter to avoid incorrect matches
+- Clear cache periodically if storage is a concern
+</Tip>
+
+## Cache Management
+
+To clear the lyrics cache:
+
+```kotlin
+val lyricsDir = File(context.cacheDir, "lyrics")
+if (lyricsDir.exists()) {
+    lyricsDir.deleteRecursively()
+}
+```
+
+The app automatically recreates the directory on next lyrics fetch.
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Lyrics Feature" icon="music" href="/features/lyrics">
+    How synchronized lyrics work in the app
+  </Card>
+  <Card title="LrcParser" icon="file-lines" href="/features/lyrics#lrc-format-parsing">
+    LRC format parsing and timestamp handling
+  </Card>
+  <Card title="Music Player" icon="play" href="/features/music-player">
+    Player integration with lyrics display
+  </Card>
+</CardGroup>

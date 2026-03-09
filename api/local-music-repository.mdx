@@ -1,0 +1,320 @@
+---
+title: LocalMusicRepository
+description: Repository for accessing local music files via Android MediaStore
+---
+
+The `LocalMusicRepository` provides access to all music files on the device using Android's MediaStore API. It handles querying, filtering, and organizing local music by tracks, albums, and artists.
+
+<Note>
+This repository requires READ_EXTERNAL_STORAGE or READ_MEDIA_AUDIO permissions depending on the Android version.
+</Note>
+
+**Source Location:** `app/src/main/java/com/crowstar/deeztrackermobile/features/localmusic/LocalMusicRepository.kt`
+
+## Constructor
+
+```kotlin
+class LocalMusicRepository(
+    private val contentResolver: ContentResolver,
+    private val playlistRepository: LocalPlaylistRepository? = null
+)
+```
+
+<ParamField path="contentResolver" type="ContentResolver" required>
+  Android ContentResolver for querying MediaStore
+</ParamField>
+
+<ParamField path="playlistRepository" type="LocalPlaylistRepository?" default="null">
+  Optional playlist repository for favorite track integration
+</ParamField>
+
+## Storage Methods
+
+### getTotalStorageSpace()
+
+Get the total storage space available on the device.
+
+<ResponseField name="return" type="Long">
+  Total storage space in bytes
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val repository = LocalMusicRepository(context.contentResolver)
+val totalSpace = repository.getTotalStorageSpace()
+val totalGB = totalSpace / (1024 * 1024 * 1024)
+```
+
+## Track Query Methods
+
+### getAllTracks()
+
+Get all music tracks from device storage, sorted alphabetically by title.
+
+<ResponseField name="return" type="List<LocalTrack>">
+  List of all music tracks on the device
+</ResponseField>
+
+**Query Details:**
+- Filters out non-music files (notifications, ringtones, alarms)
+- Sorts by title (case-insensitive)
+- Includes full metadata (title, artist, album, duration, file path, size, MIME type, dates)
+- Generates album art URIs
+
+**Example:**
+
+```kotlin
+val tracks = repository.getAllTracks()
+println("Found ${tracks.size} tracks")
+
+tracks.forEach { track ->
+    println("${track.title} by ${track.artist}")
+}
+```
+
+### getTracksForAlbum()
+
+Get all tracks for a specific album.
+
+<ParamField path="albumId" type="Long" required>
+  MediaStore album ID
+</ParamField>
+
+<ResponseField name="return" type="List<LocalTrack>">
+  List of tracks in the album, sorted by track number
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val albumTracks = repository.getTracksForAlbum(albumId = 123L)
+```
+
+### getTracksForArtist()
+
+Get all tracks by a specific artist.
+
+<ParamField path="artistName" type="String" required>
+  Artist name to filter by
+</ParamField>
+
+<ResponseField name="return" type="List<LocalTrack>">
+  List of tracks by the artist
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val artistTracks = repository.getTracksForArtist("Queen")
+```
+
+### searchTracks()
+
+Search tracks by query string (searches title, artist, and album fields).
+
+<ParamField path="query" type="String" required>
+  Search query string
+</ParamField>
+
+<ResponseField name="return" type="List<LocalTrack>">
+  List of tracks matching the search query
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val results = repository.searchTracks("Bohemian")
+// Returns tracks with "Bohemian" in title, artist, or album
+```
+
+### getDownloadedTracks()
+
+Get tracks from specific file paths (used to find downloaded tracks).
+
+<ParamField path="downloadPaths" type="List<String>" required>
+  List of file paths to query
+</ParamField>
+
+<ResponseField name="return" type="List<LocalTrack>">
+  List of tracks at the specified paths
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val downloadedPaths = listOf(
+    "/storage/emulated/0/Music/track1.mp3",
+    "/storage/emulated/0/Music/track2.flac"
+)
+val tracks = repository.getDownloadedTracks(downloadedPaths)
+```
+
+### getTrackIdByPath()
+
+Get the MediaStore ID for a track at a specific file path.
+
+<ParamField path="path" type="String" required>
+  File path of the track
+</ParamField>
+
+<ResponseField name="return" type="Long?">
+  MediaStore track ID, or null if not found
+</ResponseField>
+
+## Album Methods
+
+### getAllAlbums()
+
+Get all albums from device storage.
+
+<ResponseField name="return" type="List<LocalAlbum>">
+  List of all albums with metadata (title, artist, track count, first year)
+</ResponseField>
+
+**Album Structure:**
+
+```kotlin
+data class LocalAlbum(
+    val id: Long,
+    val name: String,
+    val artist: String,
+    val albumArtUri: String?,
+    val trackCount: Int,
+    val firstYear: Int?
+)
+```
+
+## Artist Methods
+
+### getAllArtists()
+
+Get all artists from device storage.
+
+<ResponseField name="return" type="List<LocalArtist>">
+  List of all artists with track and album counts
+</ResponseField>
+
+**Artist Structure:**
+
+```kotlin
+data class LocalArtist(
+    val id: Long,
+    val name: String,
+    val trackCount: Int,
+    val albumCount: Int,
+    val albumArtUri: String? // Art from first album
+)
+```
+
+## Deletion Methods
+
+### requestDeleteTrack()
+
+Request permission to delete a track (Android 11+).
+
+<ParamField path="trackId" type="Long" required>
+  MediaStore track ID to delete
+</ParamField>
+
+<ResponseField name="return" type="IntentSender?">
+  IntentSender for requesting deletion permission, or null on Android 10 and below
+</ResponseField>
+
+<Warning>
+On Android 11+, this method returns an IntentSender that must be used with `startIntentSenderForResult()` to request user permission for deletion.
+</Warning>
+
+**Example:**
+
+```kotlin
+val intentSender = repository.requestDeleteTrack(trackId = 123L)
+if (intentSender != null) {
+    // Android 11+ - request permission
+    startIntentSenderForResult(
+        intentSender,
+        DELETE_REQUEST_CODE,
+        null, 0, 0, 0
+    )
+} else {
+    // Android 10 and below - direct deletion
+    repository.onTrackDeleted(trackId)
+}
+```
+
+### onTrackDeleted()
+
+Update internal state after a track has been deleted.
+
+<ParamField path="trackId" type="Long" required>
+  MediaStore track ID that was deleted
+</ParamField>
+
+<Info>
+This method removes the track from any playlists via LocalPlaylistRepository.
+</Info>
+
+## MediaStore Integration
+
+The repository queries the following MediaStore columns:
+
+- `_ID` - Unique track identifier
+- `TITLE` - Track title
+- `ARTIST` - Artist name
+- `ALBUM` - Album name
+- `ALBUM_ID` - Album identifier (for album art)
+- `DURATION` - Track duration in milliseconds
+- `DATA` - File path
+- `SIZE` - File size in bytes
+- `MIME_TYPE` - Audio format (audio/mpeg, audio/flac, etc.)
+- `DATE_ADDED` - Unix timestamp when added
+- `DATE_MODIFIED` - Unix timestamp of last modification
+- `TRACK` - Track number in album
+- `YEAR` - Release year
+
+## Album Art Handling
+
+Album art is retrieved using the album ID:
+
+```kotlin
+private fun getAlbumArtUri(albumId: Long): String? {
+    val artUri = Uri.parse("content://media/external/audio/albumart")
+    return ContentUris.withAppendedId(artUri, albumId).toString()
+}
+```
+
+## Usage Example
+
+```kotlin LocalMusicScreen.kt:45-68
+val repository = LocalMusicRepository(
+    contentResolver = context.contentResolver,
+    playlistRepository = LocalPlaylistRepository(context)
+)
+
+// Get all tracks
+val allTracks = repository.getAllTracks()
+
+// Get albums
+val albums = repository.getAllAlbums()
+
+// Search
+val searchResults = repository.searchTracks("Queen")
+
+// Get storage info
+val totalSpace = repository.getTotalStorageSpace()
+val totalGB = totalSpace / (1024 * 1024 * 1024)
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Local Library Feature" icon="folder" href="/features/local-library">
+    How local music browsing works in the app
+  </Card>
+  <Card title="LocalTrack Model" icon="music" href="/api/models/track">
+    LocalTrack data structure
+  </Card>
+  <Card title="LocalPlaylistRepository" icon="list" href="/features/playlists">
+    Playlist management
+  </Card>
+</CardGroup>

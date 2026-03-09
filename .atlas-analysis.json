@@ -102,6 +102,8 @@
     "LocalMusicRepository",
     "LyricsRepository",
     "DeezerApiService",
+    "LocalPlaylistRepository",
+    "DeezerRepository",
     "MainActivity"
   ]
 }
